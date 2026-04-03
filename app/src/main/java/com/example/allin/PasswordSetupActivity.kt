@@ -43,13 +43,8 @@ class PasswordSetupActivity : AppCompatActivity() {
         etPassword.addTextChangedListener(createWatcher(dots))
         etPasswordConfirm.addTextChangedListener(createWatcher(dotsConfirm))
 
-        // 하늘색 박스 클릭 시 키보드 띄우기 (강제)
-        findViewById<View>(R.id.layoutPw).setOnClickListener {
-            showKeyboard(etPassword)
-        }
-        findViewById<View>(R.id.layoutPwConfirm).setOnClickListener {
-            showKeyboard(etPasswordConfirm)
-        }
+        findViewById<View>(R.id.layoutPw).setOnClickListener { showKeyboard(etPassword) }
+        findViewById<View>(R.id.layoutPwConfirm).setOnClickListener { showKeyboard(etPasswordConfirm) }
 
         btnBack.setOnClickListener { finish() }
 
@@ -69,11 +64,16 @@ class PasswordSetupActivity : AppCompatActivity() {
 
             val userEmail = intent.getStringExtra("USER_EMAIL") ?: "user_${System.currentTimeMillis()}@example.com"
 
+            // Firebase 회원가입
             auth.createUserWithEmailAndPassword(userEmail, pw + "00")
                 .addOnCompleteListener(this) { task ->
                     if (task.isSuccessful) {
                         Toast.makeText(this, "회원가입 성공!", Toast.LENGTH_SHORT).show()
-                        finishAffinity()
+                        
+                        // [수정 핵심] 홈 화면(HomeActivity)으로 이동
+                        val intent = Intent(this, HomeActivity::class.java)
+                        startActivity(intent)
+                        finishAffinity() // 이전 액티비티들을 모두 종료
                     } else {
                         Toast.makeText(this, "오류: ${task.exception?.message}", Toast.LENGTH_LONG).show()
                     }
@@ -81,7 +81,6 @@ class PasswordSetupActivity : AppCompatActivity() {
         }
     }
 
-    // 키보드 강제 표시 함수
     private fun showKeyboard(editText: EditText) {
         editText.requestFocus()
         val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager

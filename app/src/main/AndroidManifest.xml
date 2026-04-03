@@ -21,17 +21,12 @@
             </intent-filter>
         </activity>
 
-        <activity
-            android:name=".TermsActivity"
-            android:exported="false" />
-
-        <activity
-            android:name=".UserInfoActivity"
-            android:exported="false" />
-
-        <activity
-            android:name=".PasswordSetupActivity"
-            android:exported="false" />
+        <activity android:name=".TermsActivity" android:exported="false" />
+        <activity android:name=".UserInfoActivity" android:exported="false" />
+        <activity android:name=".PasswordSetupActivity" android:exported="false" />
+        <activity android:name=".HomeActivity" android:exported="false" />
+        <activity android:name=".BudgetSetupActivity" android:exported="false" />
+        <activity android:name=".SettingsActivity" android:exported="false" />
 
     </application>
 
