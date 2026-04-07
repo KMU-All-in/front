@@ -1,27 +1,33 @@
 package com.example.allin
 
 import android.content.Intent
-import android.content.res.ColorStateList
-import android.graphics.Color
 import android.os.Bundle
+import android.view.LayoutInflater
 import android.view.View
-import android.widget.Button
-import android.widget.CheckBox
-import android.widget.TextView
+import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 
 class TermsActivity : AppCompatActivity() {
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_terms)
 
-        val btnBack = findViewById<TextView>(R.id.btnBack)
-        val btnNext = findViewById<Button>(R.id.btnNext)
-        val tvError = findViewById<TextView>(R.id.tvError)
+        val cbTerm1 = findViewById<CheckBox>(R.id.cbTerm1)
+        val cbTerm2 = findViewById<CheckBox>(R.id.cbTerm2)
+        val cbTerm3 = findViewById<CheckBox>(R.id.cbTerm3)
+        val cbTerm4 = findViewById<CheckBox>(R.id.cbTerm4)
 
-        // 각 약관 제목 클릭 시 다이얼로그 띄우기
-        setupTerm(R.id.tvTermTitle1, R.id.cbTerm1, "서비스 이용약관", "제1조 (목적)\n" +
+        val tvTermTitle1 = findViewById<TextView>(R.id.tvTermTitle1)
+        val tvTermTitle2 = findViewById<TextView>(R.id.tvTermTitle2)
+        val tvTermTitle3 = findViewById<TextView>(R.id.tvTermTitle3)
+        val tvTermTitle4 = findViewById<TextView>(R.id.tvTermTitle4)
+
+        val btnNext = findViewById<Button>(R.id.btnNext)
+        val btnBack = findViewById<TextView>(R.id.btnBack)
+
+        tvTermTitle1.setOnClickListener { showTermPopup("서비스 이용약관", "제1조 (목적)\n" +
                 "이 약관은 충동구매 방지 서비스(이하 \"서비스\")의 이용과 관련하여 회사와 이용자의 권리, 의무 및 책임사항을 규정함을 목적으로 합니다.\n" +
                 "\n" +
                 "제2조 (정의)\n" +
@@ -38,8 +44,8 @@ class TermsActivity : AppCompatActivity() {
                 "제4조 (회원의 의무)\n" +
                 "1. 회원은 정확한 정보를 제공해야 합니다.\n" +
                 "2. 회원은 타인의 정보를 도용해서는 안 됩니다.\n" +
-                "3. 회원은 서비스를 부정한 목적으로 이용해서는 안 됩니다.\n")
-        setupTerm(R.id.tvTermTitle2, R.id.cbTerm2, "알림 분석 동의", "제1조 (알림 분석의 목적)\n" +
+                "3. 회원은 서비스를 부정한 목적으로 이용해서는 안 됩니다.\n", cbTerm1) }
+        tvTermTitle2.setOnClickListener { showTermPopup("알림 분석 동의", "제1조 (알림 분석의 목적)\n" +
                 "앱은 사용자의 쇼핑 관련 알림을 분석하여 충동구매 패턴을 파악합니다.\n" +
                 "\n" +
                 "제2조 (수집 정보)\n" +
@@ -54,8 +60,8 @@ class TermsActivity : AppCompatActivity() {
                 "3. 통계 및 서비스 개선\n" +
                 "\n" +
                 "제4조 (정보 보안)\n" +
-                "모든 알림 분석 데이터는 암호화되어 저장되며, 제3자에게 제공되지 않습니다.\n")
-        setupTerm(R.id.tvTermTitle3, R.id.cbTerm3, "문자 분석 동의", "제1조 (문자 분석의 목적)\n" +
+                "모든 알림 분석 데이터는 암호화되어 저장되며, 제3자에게 제공되지 않습니다.\n", cbTerm2) }
+        tvTermTitle3.setOnClickListener { showTermPopup("문자 분석 동의", "제1조 (문자 분석의 목적)\n" +
                 "앱은 쇼핑 관련 문자 메시지를 분석하여 사용자의 소비 패턴을 파악합니다.\n" +
                 "\n" +
                 "제2조 (수집 정보)\n" +
@@ -70,8 +76,8 @@ class TermsActivity : AppCompatActivity() {
                 "3. 소비 패턴 리포트 생성\n" +
                 "\n" +
                 "제4조 (사용자 권리)\n" +
-                "사용자는 언제든지 문자 분석 기능을 비활성화할 수 있습니다.\n")
-        setupTerm(R.id.tvTermTitle4, R.id.cbTerm4, "알람 설정 동의", "제1조 (알람의 목적)\n" +
+                "사용자는 언제든지 문자 분석 기능을 비활성화할 수 있습니다.", cbTerm3) }
+        tvTermTitle4.setOnClickListener { showTermPopup("알람 설정 동의", "제1조 (알람의 목적)\n" +
                 "앱은 사용자가 설정한 시간에 알람을 통해 충동구매 방지를 돕습니다.\n" +
                 "\n" +
                 "제2조 (알람 종류)\n" +
@@ -83,44 +89,41 @@ class TermsActivity : AppCompatActivity() {
                 "사용자는 알람의 시간, 빈도, 종류를 자유롭게 설정할 수 있습니다.\n" +
                 "\n" +
                 "제4조 (알람 비활성화)\n" +
-                "사용자는 언제든지 설정에서 알람을 비활성화할 수 있습니다")
+                "사용자는 언제든지 설정에서 알람을 비활성화할 수 있습니다.\n", cbTerm4) }
 
         btnBack.setOnClickListener { finish() }
 
         btnNext.setOnClickListener {
-            val cb1 = findViewById<CheckBox>(R.id.cbTerm1)
-            val cb2 = findViewById<CheckBox>(R.id.cbTerm2)
-            val cb3 = findViewById<CheckBox>(R.id.cbTerm3)
-            val cb4 = findViewById<CheckBox>(R.id.cbTerm4)
-
-            if (cb1.isChecked && cb2.isChecked && cb3.isChecked && cb4.isChecked) {
-                tvError.visibility = View.GONE
+            if (cbTerm1.isChecked && cbTerm2.isChecked && cbTerm3.isChecked && cbTerm4.isChecked) {
                 val intent = Intent(this, UserInfoActivity::class.java)
                 startActivity(intent)
             } else {
-                tvError.visibility = View.VISIBLE
+                findViewById<TextView>(R.id.tvError).visibility = View.VISIBLE
             }
         }
     }
 
-    private fun setupTerm(titleViewId: Int, checkBoxId: Int, title: String, content: String) {
-        val titleView = findViewById<TextView>(titleViewId)
-        val checkBox = findViewById<CheckBox>(checkBoxId)
+    private fun showTermPopup(title: String, content: String, checkBox: CheckBox) {
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_terms, null)
+        val tvTitle = dialogView.findViewById<TextView>(R.id.tvDialogTitle)
+        val tvContent = dialogView.findViewById<TextView>(R.id.tvDialogContent)
+        val btnClose = dialogView.findViewById<ImageView>(R.id.btnClose)
 
-        titleView.setOnClickListener {
-            AlertDialog.Builder(this)
-                .setTitle(title)
-                .setMessage(content)
-                .setPositiveButton("확인") { _, _ ->
-                    checkBox.isChecked = true
-                    checkBox.isEnabled = true
-                    // 약관 확인 시 문구를 "동의하십니까?"로 변경
-                    checkBox.text = "동의하십니까?"
-                    // 체크 시 글씨색과 체크박스 색상을 진하게 변경
-                    checkBox.setTextColor(Color.parseColor("#000000"))
-                    checkBox.buttonTintList = ColorStateList.valueOf(Color.BLACK)
-                }
-                .show()
+        tvTitle.text = title
+        tvContent.text = content
+
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .create()
+
+        btnClose.setOnClickListener {
+            checkBox.isEnabled = true
+            checkBox.isChecked = true
+            checkBox.text = "동의함" // [수정] 안내 문구 삭제 및 텍스트 변경
+            checkBox.setTextColor(resources.getColor(android.R.color.black))
+            dialog.dismiss()
         }
+
+        dialog.show()
     }
 }

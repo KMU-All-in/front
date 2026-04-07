@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
+import android.util.Log
 import android.view.View
 import android.view.inputmethod.InputMethodManager
 import android.widget.Button
@@ -62,20 +63,31 @@ class PasswordSetupActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
+            // 이전 단계에서 전달받은 이메일 (없으면 테스트용 생성)
             val userEmail = intent.getStringExtra("USER_EMAIL") ?: "user_${System.currentTimeMillis()}@example.com"
+            val finalPassword = pw + "0000" // Firebase 최소 길이를 위해 8자리로 생성
 
-            // Firebase 회원가입
-            auth.createUserWithEmailAndPassword(userEmail, pw + "00")
+            btnComplete.isEnabled = false
+            
+            auth.createUserWithEmailAndPassword(userEmail, finalPassword)
                 .addOnCompleteListener(this) { task ->
                     if (task.isSuccessful) {
-                        Toast.makeText(this, "회원가입 성공!", Toast.LENGTH_SHORT).show()
+                        // [추가] 앱 잠금용 비밀번호를 기기에 저장 (쇼핑 앱 차단 시 사용)
+                        val sharedPref = getSharedPreferences("AppLockPrefs", Context.MODE_PRIVATE)
+                        sharedPref.edit().putString("LOCK_PW", pw).apply()
+
+                        Toast.makeText(this, "회원가입이 완료되었습니다! 로그인해주세요.", Toast.LENGTH_LONG).show()
                         
-                        // [수정 핵심] 홈 화면(HomeActivity)으로 이동
-                        val intent = Intent(this, HomeActivity::class.java)
+                        // 로그아웃 후 로그인 화면(AllInActivity)으로 이동
+                        auth.signOut()
+                        val intent = Intent(this, AllInActivity::class.java)
+                        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                         startActivity(intent)
-                        finishAffinity() // 이전 액티비티들을 모두 종료
+                        finish() 
                     } else {
-                        Toast.makeText(this, "오류: ${task.exception?.message}", Toast.LENGTH_LONG).show()
+                        btnComplete.isEnabled = true
+                        val errorMsg = task.exception?.message ?: "회원가입 실패"
+                        Toast.makeText(this, "오류: $errorMsg", Toast.LENGTH_LONG).show()
                     }
                 }
         }
