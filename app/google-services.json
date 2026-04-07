@@ -1,40 +1,21 @@
 {
   "project_info": {
-    "project_number": "571623024075",
-    "project_id": "test-ae1bb",
-    "storage_bucket": "test-ae1bb.firebasestorage.app"
+    "project_number": "436624512869",
+    "project_id": "all---in",
+    "storage_bucket": "all---in.firebasestorage.app"
   },
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:571623024075:android:760db13e62944919b3c24e",
+        "mobilesdk_app_id": "1:436624512869:android:c90c7cfdefeddd255e738c",
         "android_client_info": {
-          "package_name": "com.example.allin"
+          "package_name": "com.example.test"
         }
       },
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyAdCG353rtC286zI6Qu0fOCcWY7GM4BfBI"
-        }
-      ],
-      "services": {
-        "appinvite_service": {
-          "other_platform_oauth_client": []
-        }
-      }
-    },
-    {
-      "client_info": {
-        "mobilesdk_app_id": "1:571623024075:android:c4409b62763f85cfb3c24e",
-        "android_client_info": {
-          "package_name": "test.build.gradle"
-        }
-      },
-      "oauth_client": [],
-      "api_key": [
-        {
-          "current_key": "AIzaSyAdCG353rtC286zI6Qu0fOCcWY7GM4BfBI"
+          "current_key": "AIzaSyAXALZzh-E0KgugB_9cQGkbUCdtuOucO5Q"
         }
       ],
       "services": {
