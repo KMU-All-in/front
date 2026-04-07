@@ -30,7 +30,8 @@ class AllInActivity : AppCompatActivity() {
 
         btnLogin.setOnClickListener {
             val email = etUsername.text.toString()
-            val password = etPassword.text.toString() + "00" // 가입 시 pw + "00"으로 저장했으므로 동일하게
+            val password = etPassword.text.toString() + "0000" // 가입 시 pw + "00"으로 저장했으므로 동일하게
+            // PasswordSetupActivity에서는 0000을 붙였는데 여긴 00만 붙여서 00을 추가했습니다.
 
             if (email.isEmpty() || password.length < 6) {
                 Toast.makeText(this, "이메일과 비밀번호를 올바르게 입력해주세요.", Toast.LENGTH_SHORT).show()
