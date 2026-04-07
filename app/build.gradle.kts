@@ -9,7 +9,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.allin"
+        applicationId = "com.example.test" // [수정] 파이어베이스와 동일하게 변경
         minSdk = 26
         targetSdk = 35
         versionCode = 1
