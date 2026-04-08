@@ -1,14 +1,21 @@
 package com.example.allin
 
 import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.*
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
-import org.json.JSONArray
-import org.json.JSONObject
+import androidx.lifecycle.lifecycleScope
+import com.example.allin.data.FakeCartRepository
+import com.example.allin.data.FakeProduct
+import com.example.allin.data.FakeProductDatabase
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.DecimalFormat
 import java.util.*
 
@@ -17,109 +24,143 @@ class FakeCartActivity : AppCompatActivity() {
     private lateinit var cartItemsContainer: LinearLayout
     private lateinit var cardAddProduct: CardView
     private lateinit var dimView: View
+    private lateinit var etProductName: EditText
+    private lateinit var etProductPrice: EditText
+    private lateinit var spProductCategory: Spinner
+    private lateinit var btnSubmitProduct: Button
+
+    private lateinit var repository: FakeCartRepository
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_fake_cart)
 
+        val database = FakeProductDatabase.getDatabase(this)
+        repository = FakeCartRepository(database.fakeProductDao())
+
+        initViews()
+        setupListeners()
+        observeCartItems()
+    }
+
+    private fun initViews() {
         cartItemsContainer = findViewById(R.id.cartItemsContainer)
         cardAddProduct = findViewById(R.id.cardAddProduct)
         dimView = findViewById(R.id.dimView)
+        etProductName = findViewById(R.id.etProductName)
+        etProductPrice = findViewById(R.id.etProductPrice)
+        spProductCategory = findViewById(R.id.spProductCategory)
+        btnSubmitProduct = findViewById(R.id.btnSubmitProduct)
 
-        val btnAddProduct = findViewById<Button>(R.id.btnAddProduct)
-        val btnCloseCard = findViewById<ImageView>(R.id.btnCloseCard)
-        val btnFetchInfo = findViewById<Button>(R.id.btnFetchInfo)
-        val spExpireDays = findViewById<Spinner>(R.id.spExpireDays)
-
-        // 만료일 선택 스피너 (7일 고정 또는 선택 가능)
-        val days = arrayOf("7일", "14일", "30일")
-        spExpireDays.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, days)
-
-        // 상품 추가 팝업 열기
-        btnAddProduct.setOnClickListener {
-            dimView.visibility = View.VISIBLE
-            cardAddProduct.visibility = View.VISIBLE
-        }
-
-        // 팝업 닫기
-        btnCloseCard.setOnClickListener {
-            dimView.visibility = View.GONE
-            cardAddProduct.visibility = View.GONE
-        }
-
-        // 정보 가져오기 버튼 (여기서는 예시로 '스니커즈' 자동 추가)
-        btnFetchInfo.setOnClickListener {
-            addProductToCart("새로운 상품", "패션/의류", 125000)
-            dimView.visibility = View.GONE
-            cardAddProduct.visibility = View.GONE
-            Toast.makeText(this, "상품이 추가되었습니다.", Toast.LENGTH_SHORT).show()
-        }
-
-        loadCartItems()
+        val categories = arrayOf("패션/의류", "가전/디지털", "뷰티", "도서", "기타")
+        spProductCategory.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, categories)
     }
 
-    private fun addProductToCart(name: String, category: String, price: Int) {
-        val sharedPref = getSharedPreferences("CartPrefs", Context.MODE_PRIVATE)
-        val cartArray = JSONArray(sharedPref.getString("CART_ITEMS", "[]"))
-        
-        val newItem = JSONObject().apply {
-            put("id", UUID.randomUUID().toString())
-            put("name", name)
-            put("category", category)
-            put("price", price)
-            put("addedTime", System.currentTimeMillis())
+    private fun setupListeners() {
+        findViewById<Button>(R.id.btnAddProduct).setOnClickListener { 
+            showAddProductPopup() 
         }
-        
-        cartArray.put(newItem)
-        sharedPref.edit().putString("CART_ITEMS", cartArray.toString()).apply()
-        loadCartItems()
+        findViewById<ImageView>(R.id.btnCloseCard).setOnClickListener { hideAddProductPopup() }
+        btnSubmitProduct.setOnClickListener { validateAndSaveProduct() }
     }
 
-    private fun loadCartItems() {
-        cartItemsContainer.removeAllViews()
-        val sharedPref = getSharedPreferences("CartPrefs", Context.MODE_PRIVATE)
-        val cartArray = JSONArray(sharedPref.getString("CART_ITEMS", "[]"))
-        val newCartArray = JSONArray()
-
-        val dec = DecimalFormat("#,###")
-        val currentTime = System.currentTimeMillis()
-        val sevenDaysInMillis = 7 * 24 * 60 * 60 * 1000L
-
-        for (i in 0 until cartArray.length()) {
-            val item = cartArray.getJSONObject(i)
-            val addedTime = item.getLong("addedTime")
-            
-            if (currentTime - addedTime < sevenDaysInMillis) {
-                newCartArray.put(item)
-                val itemView = LayoutInflater.from(this).inflate(R.layout.item_cart_product, null)
-                
-                itemView.findViewById<TextView>(R.id.tvProductName).text = item.getString("name")
-                itemView.findViewById<TextView>(R.id.tvProductCategory).text = item.getString("category")
-                itemView.findViewById<TextView>(R.id.tvProductPrice).text = "${dec.format(item.getInt("price"))}원"
-                
-                val remainingDays = 7 - ((currentTime - addedTime) / (24 * 60 * 60 * 1000L)).toInt()
-                itemView.findViewById<TextView>(R.id.tvRemainingTime).text = "${remainingDays}일 후 삭제"
-
-                itemView.findViewById<Button>(R.id.btnCompletePayment).setOnClickListener {
-                    removeProduct(item.getString("id"))
-                }
-
-                cartItemsContainer.addView(itemView)
+    private fun observeCartItems() {
+        lifecycleScope.launch {
+            repository.allProducts.collect { products ->
+                renderCartItems(products)
             }
         }
-        sharedPref.edit().putString("CART_ITEMS", newCartArray.toString()).apply()
     }
 
-    private fun removeProduct(id: String) {
-        val sharedPref = getSharedPreferences("CartPrefs", Context.MODE_PRIVATE)
-        val cartArray = JSONArray(sharedPref.getString("CART_ITEMS", "[]"))
-        val newCartArray = JSONArray()
-        for (i in 0 until cartArray.length()) {
-            val item = cartArray.getJSONObject(i)
-            if (item.getString("id") != id) newCartArray.put(item)
+    private fun renderCartItems(products: List<FakeProduct>) {
+        cartItemsContainer.removeAllViews()
+        val dec = DecimalFormat("#,###")
+        for (product in products) {
+            val itemView = LayoutInflater.from(this).inflate(R.layout.item_cart_product, null)
+            itemView.findViewById<TextView>(R.id.tvProductName).text = product.name
+            itemView.findViewById<TextView>(R.id.tvProductPrice).text = "${dec.format(product.price)}원"
+            
+            itemView.setOnClickListener {
+                showReasonManagementDialog(product)
+            }
+            
+            // 삭제 버튼 (결제 완료 버튼 재활용)
+            itemView.findViewById<Button>(R.id.btnCompletePayment).setOnClickListener {
+                lifecycleScope.launch {
+                    repository.delete(product)
+                }
+            }
+
+            cartItemsContainer.addView(itemView)
         }
-        sharedPref.edit().putString("CART_ITEMS", newCartArray.toString()).apply()
-        loadCartItems()
-        Toast.makeText(this, "충동구매를 참으셨군요!", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun showReasonManagementDialog(product: FakeProduct) {
+        val dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_manage_reasons, null)
+        val tvName = dialogView.findViewById<TextView>(R.id.tvDialogProductName)
+        val llReasons = dialogView.findViewById<LinearLayout>(R.id.llReasonsContainer)
+        val etNewReason = dialogView.findViewById<EditText>(R.id.etNewReason)
+        val btnAddReason = dialogView.findViewById<Button>(R.id.btnAddReason)
+
+        tvName.text = product.name
+
+        product.reasons.forEach { reason ->
+            val tv = TextView(this)
+            tv.text = "• $reason"
+            tv.setPadding(0, 8, 0, 8)
+            llReasons.addView(tv)
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setView(dialogView)
+            .setPositiveButton("닫기", null)
+            .create()
+
+        btnAddReason.setOnClickListener {
+            val newReason = etNewReason.text.toString().trim()
+            if (newReason.isNotEmpty()) {
+                val updatedReasons = product.reasons.toMutableList()
+                updatedReasons.add(newReason)
+                
+                lifecycleScope.launch {
+                    val updatedProduct = product.copy(reasons = updatedReasons)
+                    repository.insert(updatedProduct)
+                    withContext(Dispatchers.Main) {
+                        dialog.dismiss()
+                        Toast.makeText(this@FakeCartActivity, "이유가 추가되었습니다.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+        dialog.show()
+    }
+
+    private fun validateAndSaveProduct() {
+        val name = etProductName.text.toString().trim()
+        val priceStr = etProductPrice.text.toString().trim()
+        if (name.isEmpty() || priceStr.isEmpty()) return
+
+        lifecycleScope.launch {
+            val product = FakeProduct(
+                id = UUID.randomUUID().toString(),
+                name = name,
+                category = spProductCategory.selectedItem.toString(),
+                price = priceStr.toIntOrNull() ?: 0,
+                reasons = emptyList()
+            )
+            repository.insert(product)
+            withContext(Dispatchers.Main) { hideAddProductPopup() }
+        }
+    }
+
+    private fun showAddProductPopup() {
+        dimView.visibility = View.VISIBLE
+        cardAddProduct.visibility = View.VISIBLE
+    }
+
+    private fun hideAddProductPopup() {
+        dimView.visibility = View.GONE
+        cardAddProduct.visibility = View.GONE
+        etProductName.setText(""); etProductPrice.setText("")
     }
 }

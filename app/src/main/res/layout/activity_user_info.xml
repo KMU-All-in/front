@@ -9,155 +9,49 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="center"
         android:orientation="vertical"
         android:padding="24dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="내 정보 설정"
+            android:textColor="@android:color/black"
+            android:textSize="24sp"
+            android:textStyle="bold" />
 
         <androidx.cardview.widget.CardView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            app:cardCornerRadius="24dp"
+            android:layout_marginTop="24dp"
+            app:cardCornerRadius="16dp"
             app:cardElevation="0dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:background="@android:color/white"
                 android:orientation="vertical"
-                android:padding="32dp">
-
-                <TextView
-                    android:id="@+id/btnBack"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginBottom="24dp"
-                    android:clickable="true"
-                    android:focusable="true"
-                    android:text="←  뒤로가기"
-                    android:textColor="@android:color/black"
-                    android:textSize="14sp" />
+                android:padding="20dp"
+                android:background="@android:color/white">
 
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="회원가입 - 사용자 정보"
-                    android:textColor="@android:color/black"
-                    android:textSize="22sp"
-                    android:textStyle="bold" />
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:text="맞춤형 서비스를 위한 정보를 입력해주세요"
-                    android:textColor="#9E9E9E"
-                    android:textSize="14sp" />
-
-                <!-- 아이디 -->
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="24dp"
-                    android:text="아이디"
+                    android:text="닉네임"
                     android:textColor="@android:color/black"
                     android:textStyle="bold" />
-
                 <EditText
-                    android:id="@+id/etUserId"
+                    android:id="@+id/etNickname"
                     android:layout_width="match_parent"
                     android:layout_height="50dp"
                     android:layout_marginTop="8dp"
                     android:background="#F2F4F8"
-                    android:hint="아이디를 입력하세요"
+                    android:hint="닉네임을 입력해주세요"
+                    android:paddingStart="12dp"
+                    android:textColor="#424242"
                     android:textColorHint="#9E9E9E"
-                    android:textColor="@android:color/black"
-                    android:paddingStart="16dp"
-                    android:textSize="14sp"
-                    android:inputType="text"
-                    android:maxLines="1"
-                    android:imeOptions="actionNext" />
+                    android:textSize="14sp" />
 
-                <!-- 비밀번호 -->
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    android:text="비밀번호"
-                    android:textColor="@android:color/black"
-                    android:textStyle="bold" />
-
-                <EditText
-                    android:id="@+id/etUserPw"
-                    android:layout_width="match_parent"
-                    android:layout_height="50dp"
-                    android:layout_marginTop="8dp"
-                    android:background="#F2F4F8"
-                    android:hint="비밀번호를 입력하세요"
-                    android:textColorHint="#9E9E9E"
-                    android:textColor="@android:color/black"
-                    android:inputType="textPassword"
-                    android:maxLines="1"
-                    android:paddingStart="16dp"
-                    android:textSize="14sp"
-                    android:imeOptions="actionNext" />
-
-                <!-- 성별 -->
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    android:text="성별"
-                    android:textColor="@android:color/black"
-                    android:textStyle="bold" />
-
-                <RadioGroup
-                    android:id="@+id/rgGender"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="8dp"
-                    android:orientation="horizontal">
-
-                    <RadioButton
-                        android:id="@+id/rbMale"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="남성"
-                        android:textColor="@android:color/black" />
-
-                    <RadioButton
-                        android:id="@+id/rbFemale"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="16dp"
-                        android:text="여성"
-                        android:textColor="@android:color/black" />
-
-                    <RadioButton
-                        android:id="@+id/rbOther"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="16dp"
-                        android:text="기타"
-                        android:textColor="@android:color/black" />
-                </RadioGroup>
-
-                <!-- 연령대 -->
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    android:text="연령대"
-                    android:textColor="@android:color/black"
-                    android:textStyle="bold" />
-
-                <Spinner
-                    android:id="@+id/spAge"
-                    android:layout_width="match_parent"
-                    android:layout_height="50dp"
-                    android:layout_marginTop="8dp"
-                    android:background="#F2F4F8" />
-
-                <!-- 이메일 -->
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -165,23 +59,75 @@
                     android:text="이메일"
                     android:textColor="@android:color/black"
                     android:textStyle="bold" />
-
                 <EditText
                     android:id="@+id/etUserEmail"
                     android:layout_width="match_parent"
                     android:layout_height="50dp"
                     android:layout_marginTop="8dp"
                     android:background="#F2F4F8"
-                    android:hint="example@email.com"
-                    android:textColorHint="#9E9E9E"
-                    android:textColor="@android:color/black"
-                    android:paddingStart="16dp"
-                    android:textSize="14sp"
+                    android:hint="login@example.com"
                     android:inputType="textEmailAddress"
-                    android:maxLines="1"
-                    android:imeOptions="actionNext" />
+                    android:paddingStart="12dp"
+                    android:textColor="#424242"
+                    android:textColorHint="#9E9E9E"
+                    android:textSize="14sp" />
 
-                <!-- 직업 -->
+                <!-- [추가] 계정 비밀번호 -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="비밀번호"
+                    android:textColor="@android:color/black"
+                    android:textStyle="bold" />
+                <EditText
+                    android:id="@+id/etUserPw"
+                    android:layout_width="match_parent"
+                    android:layout_height="50dp"
+                    android:layout_marginTop="8dp"
+                    android:background="#F2F4F8"
+                    android:hint="6자리 이상 입력해주세요"
+                    android:inputType="textPassword"
+                    android:paddingStart="12dp"
+                    android:textColor="#424242"
+                    android:textColorHint="#9E9E9E"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="비밀번호 확인"
+                    android:textColor="@android:color/black"
+                    android:textStyle="bold" />
+                <EditText
+                    android:id="@+id/etUserPwConfirm"
+                    android:layout_width="match_parent"
+                    android:layout_height="50dp"
+                    android:layout_marginTop="8dp"
+                    android:background="#F2F4F8"
+                    android:hint="비밀번호를 한 번 더 입력해주세요"
+                    android:inputType="textPassword"
+                    android:paddingStart="12dp"
+                    android:textColor="#424242"
+                    android:textColorHint="#9E9E9E"
+                    android:textSize="14sp" />
+
+                <!-- 연령대, 직업, 관심사 (기존 유지) -->
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="연령대"
+                    android:textColor="@android:color/black"
+                    android:textStyle="bold" />
+                <Spinner
+                    android:id="@+id/spAge"
+                    android:layout_width="match_parent"
+                    android:layout_height="50dp"
+                    android:layout_marginTop="8dp"
+                    android:background="#F2F4F8" />
+
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -189,73 +135,48 @@
                     android:text="직업"
                     android:textColor="@android:color/black"
                     android:textStyle="bold" />
-
                 <EditText
                     android:id="@+id/etUserJob"
                     android:layout_width="match_parent"
                     android:layout_height="50dp"
                     android:layout_marginTop="8dp"
                     android:background="#F2F4F8"
-                    android:hint="직업을 입력하세요"
+                    android:hint="예: 학생, 직장인 등"
+                    android:paddingStart="12dp"
+                    android:textColor="#424242"
                     android:textColorHint="#9E9E9E"
-                    android:textColor="@android:color/black"
-                    android:paddingStart="16dp"
-                    android:textSize="14sp"
-                    android:inputType="text"
-                    android:maxLines="1"
-                    android:imeOptions="actionDone" />
+                    android:textSize="14sp" />
 
-                <!-- 선호 카테고리 -->
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="16dp"
-                    android:text="선호 카테고리 (중복 선택 가능)"
+                    android:text="주요 관심사"
                     android:textColor="@android:color/black"
                     android:textStyle="bold" />
-
                 <GridLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginTop="8dp"
                     android:columnCount="2">
-
-                    <CheckBox android:id="@+id/cbCat1" android:text="패션/의류" android:textColor="@android:color/black" />
-                    <CheckBox android:id="@+id/cbCat2" android:text="뷰티/화장품" android:textColor="@android:color/black" />
-                    <CheckBox android:id="@+id/cbCat3" android:text="전자기기" android:textColor="@android:color/black" />
-                    <CheckBox android:id="@+id/cbCat4" android:text="도서/문구" android:textColor="@android:color/black" />
-                    <CheckBox android:id="@+id/cbCat5" android:text="식품/음료" android:textColor="@android:color/black" />
-                    <CheckBox android:id="@+id/cbCat6" android:text="생활용품" android:textColor="@android:color/black" />
-                    <CheckBox android:id="@+id/cbCat7" android:text="스포츠/레저" android:textColor="@android:color/black" />
-                    <CheckBox android:id="@+id/cbCat8" android:text="기타" android:textColor="@android:color/black" />
+                    <CheckBox android:id="@+id/cbFashion" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="패션/의류" />
+                    <CheckBox android:id="@+id/cbBeauty" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="뷰티/화장품" />
+                    <CheckBox android:id="@+id/cbDigital" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="전자기기" />
+                    <CheckBox android:id="@+id/cbFood" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="식품/음료" />
                 </GridLayout>
-
-                <!-- 에러 메시지 -->
-                <TextView
-                    android:id="@+id/tvError"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="20dp"
-                    android:background="#FFF5F5"
-                    android:gravity="center"
-                    android:padding="12dp"
-                    android:text="모든 사용자 정보를 입력해주세요!"
-                    android:textColor="#FF5252"
-                    android:textSize="14sp"
-                    android:textStyle="bold"
-                    android:visibility="gone" />
-
-                <Button
-                    android:id="@+id/btnNext"
-                    android:layout_width="match_parent"
-                    android:layout_height="50dp"
-                    android:layout_marginTop="20dp"
-                    android:backgroundTint="@android:color/black"
-                    android:text="다음"
-                    android:textColor="@android:color/white"
-                    app:cornerRadius="8dp" />
 
             </LinearLayout>
         </androidx.cardview.widget.CardView>
+
+        <Button
+            android:id="@+id/btnNext"
+            android:layout_width="match_parent"
+            android:layout_height="55dp"
+            android:layout_marginTop="32dp"
+            android:backgroundTint="@android:color/black"
+            android:text="다음 단계로"
+            android:textColor="@android:color/white"
+            app:cornerRadius="12dp" />
+
     </LinearLayout>
 </ScrollView>

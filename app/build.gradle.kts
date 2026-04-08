@@ -2,6 +2,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.google.services)
+    id("kotlin-kapt")
 }
 
 android {
@@ -9,7 +10,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.test" // [수정] 파이어베이스와 동일하게 변경
+        applicationId = "com.example.test" 
         minSdk = 26
         targetSdk = 35
         versionCode = 1
@@ -44,6 +45,26 @@ dependencies {
     // Firebase
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth.ktx)
+
+    // 웹페이지 정보 추출 및 비동기
+    implementation("org.jsoup:jsoup:1.16.1")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.7.3")
+
+    // ML Kit (OCR)
+    implementation("com.google.mlkit:text-recognition-korean:16.0.0")
+    implementation("androidx.activity:activity-ktx:1.9.3")
+
+    // Room DB
+    val roomVersion = "2.6.1"
+    implementation("androidx.room:room-runtime:$roomVersion")
+    implementation("androidx.room:room-ktx:$roomVersion")
+    kapt("androidx.room:room-compiler:$roomVersion")
+
+    // WorkManager
+    implementation("androidx.work:work-runtime-ktx:2.9.0")
+
+    // [추가] Gson (데이터 리스트 저장용)
+    implementation("com.google.code.gson:gson:2.10.1")
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

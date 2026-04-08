@@ -2,6 +2,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -10,8 +12,9 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.AllIn">
-
+        android:theme="@style/Theme.AllIn"
+        tools:targetApi="31">
+        
         <activity
             android:name=".AllInActivity"
             android:exported="true">
@@ -21,13 +24,22 @@
             </intent-filter>
         </activity>
 
-        <activity android:name=".TermsActivity" android:exported="false" />
-        <activity android:name=".UserInfoActivity" android:exported="false" />
-        <activity android:name=".PasswordSetupActivity" android:exported="false" />
-        <activity android:name=".HomeActivity" android:exported="false" />
-        <activity android:name=".BudgetSetupActivity" android:exported="false" />
-        <activity android:name=".SettingsActivity" android:exported="false" />
-
+        <activity android:name=".UserInfoActivity" />
+        <activity android:name=".TermsActivity" />
+        <activity android:name=".PasswordSetupActivity" />
+        <activity android:name=".HomeActivity" />
+        
+        <!-- [수정] 공유받기 기능을 위해 intent-filter 추가 -->
+        <activity 
+            android:name=".FakeCartActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+        
     </application>
 
 </manifest>

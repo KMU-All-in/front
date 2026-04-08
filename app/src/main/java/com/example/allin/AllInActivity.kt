@@ -23,18 +23,18 @@ class AllInActivity : AppCompatActivity() {
             finish()
         }
 
-        val etUsername = findViewById<EditText>(R.id.etUsername) // 이메일 입력창
-        val etPassword = findViewById<EditText>(R.id.etPassword) // 비밀번호(회원가입시 설정한 4자리 + 00)
+        val etEmail = findViewById<EditText>(R.id.etEmail) 
+        val etPassword = findViewById<EditText>(R.id.etPassword)
         val btnLogin = findViewById<Button>(R.id.btnLogin)
         val btnRegister = findViewById<Button>(R.id.btnRegister)
 
         btnLogin.setOnClickListener {
-            val email = etUsername.text.toString()
-            val password = etPassword.text.toString() + "0000" // 가입 시 pw + "00"으로 저장했으므로 동일하게
-            // PasswordSetupActivity에서는 0000을 붙였는데 여긴 00만 붙여서 00을 추가했습니다.
+            // [수정] .trim()을 추가하여 앞뒤 공백을 제거합니다.
+            val email = etEmail.text.toString().trim()
+            val password = etPassword.text.toString().trim() 
 
-            if (email.isEmpty() || password.length < 6) {
-                Toast.makeText(this, "이메일과 비밀번호를 올바르게 입력해주세요.", Toast.LENGTH_SHORT).show()
+            if (email.isEmpty() || password.isEmpty()) {
+                Toast.makeText(this, "이메일과 비밀번호를 모두 입력해주세요.", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
@@ -47,6 +47,7 @@ class AllInActivity : AppCompatActivity() {
                         startActivity(intent)
                         finish()
                     } else {
+                        // 에러 메시지를 구체적으로 표시하여 원인 파악을 돕습니다.
                         Toast.makeText(this, "로그인 실패: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
                     }
                 }

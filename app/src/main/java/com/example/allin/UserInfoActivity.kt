@@ -1,53 +1,89 @@
 package com.example.allin
 
+import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
+import com.google.firebase.auth.FirebaseAuth
 
 class UserInfoActivity : AppCompatActivity() {
+
+    private lateinit var auth: FirebaseAuth
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_user_info)
 
-        val btnBack = findViewById<TextView>(R.id.btnBack)
-        val btnNext = findViewById<Button>(R.id.btnNext)
-        val tvError = findViewById<TextView>(R.id.tvError)
-        
-        val etUserId = findViewById<EditText>(R.id.etUserId)
-        val etUserPw = findViewById<EditText>(R.id.etUserPw)
-        val rgGender = findViewById<RadioGroup>(R.id.rgGender)
-        val spAge = findViewById<Spinner>(R.id.spAge)
+        auth = FirebaseAuth.getInstance()
+
+        val etNickname = findViewById<EditText>(R.id.etNickname)
         val etUserEmail = findViewById<EditText>(R.id.etUserEmail)
-        val etUserJob = findViewById<EditText>(R.id.etUserJob)
-
-        // Spinner 설정 (연령대) - 사진과 동일한 목록으로 변경
-        val ages = arrayOf("연령대를 선택하세요", "10대", "20대", "30대", "40대", "50대", "60대 이상")
+        val etUserPw = findViewById<EditText>(R.id.etUserPw)
+        val etUserPwConfirm = findViewById<EditText>(R.id.etUserPwConfirm)
         
-        // 커스텀 레이아웃 적용
-        val adapter = ArrayAdapter(this, R.layout.spinner_item, ages)
-        adapter.setDropDownViewResource(R.layout.spinner_dropdown_item)
-        spAge.adapter = adapter
+        val spAge = findViewById<Spinner>(R.id.spAge)
+        val etUserJob = findViewById<EditText>(R.id.etUserJob)
+        val cbFashion = findViewById<CheckBox>(R.id.cbFashion)
+        val cbBeauty = findViewById<CheckBox>(R.id.cbBeauty)
+        val cbDigital = findViewById<CheckBox>(R.id.cbDigital)
+        val cbFood = findViewById<CheckBox>(R.id.cbFood)
 
-        btnBack.setOnClickListener { finish() }
+        val btnNext = findViewById<Button>(R.id.btnNext)
+
+        val ages = arrayOf("10대", "20대", "30대", "40대", "50대 이상")
+        val ageAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, ages)
+        spAge.adapter = ageAdapter
 
         btnNext.setOnClickListener {
-            val isInfoComplete = etUserId.text.isNotEmpty() &&
-                    etUserPw.text.isNotEmpty() &&
-                    rgGender.checkedRadioButtonId != -1 &&
-                    spAge.selectedItemPosition != 0 &&
-                    etUserEmail.text.isNotEmpty() &&
-                    etUserJob.text.isNotEmpty()
+            val nickname = etNickname.text.toString().trim()
+            val email = etUserEmail.text.toString().trim()
+            val password = etUserPw.text.toString().trim()
+            val passwordConfirm = etUserPwConfirm.text.toString().trim()
 
-            if (isInfoComplete) {
-                tvError.visibility = View.GONE
-                val intent = Intent(this, PasswordSetupActivity::class.java)
-                intent.putExtra("USER_EMAIL", etUserEmail.text.toString())
-                startActivity(intent)
-            } else {
-                tvError.visibility = View.VISIBLE
+            if (nickname.isEmpty() || email.isEmpty() || password.isEmpty()) {
+                Toast.makeText(this, "필수 정보를 모두 입력해주세요.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
             }
+
+            if (password != passwordConfirm) {
+                Toast.makeText(this, "비밀번호가 일치하지 않습니다.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            if (password.length < 6) {
+                Toast.makeText(this, "비밀번호는 6자리 이상이어야 합니다.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+
+            // [핵심] Firebase 회원가입 실행
+            auth.createUserWithEmailAndPassword(email, password)
+                .addOnCompleteListener(this) { task ->
+                    if (task.isSuccessful) {
+                        // 가입 성공 시 부가 정보 저장
+                        saveUserInfo(nickname, email, spAge.selectedItem.toString(), etUserJob.text.toString())
+                        
+                        Toast.makeText(this, "회원가입 성공!", Toast.LENGTH_SHORT).show()
+                        
+                        // 다음 단계(예산 설정)로 이동
+                        val intent = Intent(this, BudgetSetupActivity::class.java)
+                        startActivity(intent)
+                        finish()
+                    } else {
+                        Toast.makeText(this, "가입 실패: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
+                    }
+                }
+        }
+    }
+
+    private fun saveUserInfo(nickname: String, email: String, age: String, job: String) {
+        val sharedPref = getSharedPreferences("UserPrefs", Context.MODE_PRIVATE)
+        with(sharedPref.edit()) {
+            putString("NICKNAME", nickname)
+            putString("EMAIL", email)
+            putString("AGE", age)
+            putString("JOB", job)
+            apply()
         }
     }
 }

@@ -24,18 +24,28 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="로그인"
+                android:text="반가워요!"
                 android:textColor="@android:color/black"
                 android:textSize="24sp"
                 android:textStyle="bold" />
 
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:text="이메일로 간편하게 로그인하세요"
+                android:textColor="#9E9E9E"
+                android:textSize="14sp" />
+
+            <!-- 아이디 -> 이메일로 변경 -->
             <EditText
-                android:id="@+id/etUsername"
+                android:id="@+id/etEmail"
                 android:layout_width="match_parent"
                 android:layout_height="50dp"
                 android:layout_marginTop="32dp"
                 android:background="#F2F4F8"
-                android:hint="아이디"
+                android:hint="이메일 주소"
+                android:inputType="textEmailAddress"
                 android:textColorHint="#9E9E9E"
                 android:textColor="@android:color/black"
                 android:paddingStart="16dp"
@@ -70,7 +80,7 @@
                 android:layout_height="50dp"
                 android:layout_marginTop="12dp"
                 android:backgroundTint="#F2F4F8"
-                android:text="회원가입"
+                android:text="새로 오셨나요? 회원가입"
                 android:textColor="@android:color/black"
                 app:cornerRadius="8dp" />
 

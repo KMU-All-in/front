@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp">
+
+    <TextView
+        android:id="@+id/tvDialogProductName"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="상품명"
+        android:textColor="@android:color/black"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="내가 이 상품을 사야 하는 이유들"
+        android:textColor="#4F6FFF"
+        android:textSize="12sp"
+        android:textStyle="bold" />
+
+    <!-- 이유들이 동적으로 추가될 공간 -->
+    <LinearLayout
+        android:id="@+id/llReasonsContainer"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="vertical" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="16dp"
+        android:background="#EEEEEE" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="새로운 이유 추가하기"
+        android:textColor="@android:color/black"
+        android:textSize="14sp"
+        android:textStyle="bold" />
+
+    <EditText
+        android:id="@+id/etNewReason"
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:layout_marginTop="8dp"
+        android:background="#F2F4F8"
+        android:hint="여기에 이유를 적어보세요..."
+        android:paddingStart="12dp"
+        android:textSize="13sp" />
+
+    <Button
+        android:id="@+id/btnAddReason"
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:layout_marginTop="12dp"
+        android:backgroundTint="#4F6FFF"
+        android:text="이유 덧붙이기"
+        android:textColor="@android:color/white" />
+
+</LinearLayout>
