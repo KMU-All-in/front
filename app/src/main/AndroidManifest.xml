@@ -29,7 +29,10 @@
         <activity android:name=".PasswordSetupActivity" />
         <activity android:name=".HomeActivity" />
         
-        <!-- [수정] 공유받기 기능을 위해 intent-filter 추가 -->
+        <!-- [추가] 누락된 액티비티 등록 -->
+        <activity android:name=".SettingsActivity" />
+        <activity android:name=".BudgetSetupActivity" />
+        
         <activity 
             android:name=".FakeCartActivity"
             android:exported="true">

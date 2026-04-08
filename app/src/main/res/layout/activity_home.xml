@@ -6,7 +6,7 @@
     android:background="#E9EFFF"
     android:orientation="vertical">
 
-    <!-- Top Bar: 설정 버튼을 우측 상단으로 이동 -->
+    <!-- Top Bar -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -35,11 +35,11 @@
                 android:textSize="12sp" />
         </LinearLayout>
 
-        <!-- 설정 아이콘 (우측 상단) -->
         <ImageView
             android:id="@+id/ivSettings"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:padding="8dp"
             android:src="@android:drawable/ic_menu_preferences"
             android:clickable="true"
             android:focusable="true"
@@ -50,7 +50,8 @@
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1">
+        android:layout_weight="1"
+        android:fillViewport="true">
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -58,7 +59,7 @@
             android:orientation="vertical"
             android:padding="20dp">
 
-            <!-- Budget Card (주간 예산) -->
+            <!-- Budget Card -->
             <androidx.cardview.widget.CardView
                 android:id="@+id/cardBudgetStatus"
                 android:layout_width="match_parent"
@@ -66,13 +67,11 @@
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp"
                 android:backgroundTint="#4F6FFF">
-
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical"
                     android:padding="20dp">
-
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
@@ -82,98 +81,39 @@
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
                             android:orientation="vertical">
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="이번 주 예산"
-                                android:textColor="#E0E0E0"
-                                android:textSize="12sp" />
-                            <TextView
-                                android:id="@+id/tvWeeklyBudget"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="0원"
-                                android:textColor="@android:color/white"
-                                android:textSize="20sp"
-                                android:textStyle="bold" />
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="이번 주 예산" android:textColor="#E0E0E0" android:textSize="12sp" />
+                            <TextView android:id="@+id/tvWeeklyBudget" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0원" android:textColor="@android:color/white" android:textSize="20sp" android:textStyle="bold" />
                         </LinearLayout>
                         <LinearLayout
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:gravity="end"
-                            android:orientation="vertical">
-                            <TextView
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="사용 금액"
-                                android:textColor="#E0E0E0"
-                                android:textSize="12sp" />
-                            <TextView
-                                android:id="@+id/tvUsedAmount"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="0원"
-                                android:textColor="@android:color/white"
-                                android:textSize="20sp"
-                                android:textStyle="bold" />
+                            android:layout_width="wrap_content" android:layout_height="wrap_content" android:gravity="end" android:orientation="vertical">
+                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="사용 금액" android:textColor="#E0E0E0" android:textSize="12sp" />
+                            <TextView android:id="@+id/tvUsedAmount" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0원" android:textColor="@android:color/white" android:textSize="20sp" android:textStyle="bold" />
                         </LinearLayout>
                     </LinearLayout>
-
-                    <ProgressBar
-                        android:id="@+id/budgetProgress"
-                        style="@android:style/Widget.ProgressBar.Horizontal"
-                        android:layout_width="match_parent"
-                        android:layout_height="8dp"
-                        android:layout_marginTop="16dp"
-                        android:progressDrawable="@drawable/custom_progress" />
-                    
-                    <TextView
-                        android:id="@+id/tvProgressPercent"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_gravity="end"
-                        android:layout_marginTop="4dp"
-                        android:text="0.0%"
-                        android:textColor="@android:color/white"
-                        android:textSize="12sp" />
+                    <ProgressBar android:id="@+id/budgetProgress" style="@android:style/Widget.ProgressBar.Horizontal" android:layout_width="match_parent" android:layout_height="8dp" android:layout_marginTop="16dp" android:progressDrawable="@drawable/custom_progress" />
+                    <TextView android:id="@+id/tvProgressPercent" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_gravity="end" android:layout_marginTop="4dp" android:text="0.0%" android:textColor="@android:color/white" android:textSize="12sp" />
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
 
-            <!-- 경고창 및 캐릭터 영역 -->
+            <!-- 캐릭터 영역 -->
             <LinearLayout
-                android:id="@+id/layoutWarning"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="30dp"
                 android:orientation="vertical"
                 android:gravity="center">
-
                 <androidx.cardview.widget.CardView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     app:cardCornerRadius="16dp"
                     app:cardElevation="0dp"
                     android:backgroundTint="#F3E5F5">
-                    <TextView
-                        android:id="@+id/tvWarningMsg"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:padding="12dp"
-                        android:text="포포가 당신의 소비를 지켜보고 있어요!"
-                        android:textColor="#9C27B0"
-                        android:textSize="12sp"
-                        android:textStyle="bold"/>
+                    <TextView android:id="@+id/tvWarningMsg" android:layout_width="wrap_content" android:layout_height="wrap_content" android:padding="12dp" android:text="포포가 당신의 소비를 지켜보고 있어요!" android:textColor="#9C27B0" android:textSize="12sp" android:textStyle="bold"/>
                 </androidx.cardview.widget.CardView>
-
-                <ImageView
-                    android:id="@+id/ivCharacter"
-                    android:layout_width="140dp"
-                    android:layout_height="140dp"
-                    android:layout_marginTop="12dp"
-                    android:src="@android:drawable/ic_menu_help" />
+                <ImageView android:id="@+id/ivCharacter" android:layout_width="140dp" android:layout_height="140dp" android:layout_marginTop="12dp" android:src="@android:drawable/ic_menu_help" />
             </LinearLayout>
 
-            <!-- 앱 잠금 기능 (단독 배치) -->
+            <!-- 앱 잠금 카드 -->
             <androidx.cardview.widget.CardView
                 android:id="@+id/menuAppLock"
                 android:layout_width="match_parent"
@@ -181,6 +121,7 @@
                 android:layout_marginTop="30dp"
                 android:clickable="true"
                 android:focusable="true"
+                android:foreground="?attr/selectableItemBackground"
                 app:cardCornerRadius="16dp"
                 app:cardElevation="0dp">
                 <LinearLayout
@@ -189,78 +130,24 @@
                     android:orientation="horizontal"
                     android:padding="20dp"
                     android:gravity="center_vertical">
-                    <ImageView
-                        android:layout_width="40dp"
-                        android:layout_height="40dp"
-                        android:src="@android:drawable/ic_lock_lock"
-                        app:tint="#F44336" />
-                    <LinearLayout
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:layout_marginStart="16dp"
-                        android:orientation="vertical">
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="쇼핑 앱 잠금 설정"
-                            android:textColor="@android:color/black"
-                            android:textSize="16sp"
-                            android:textStyle="bold" />
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="충동적인 쇼핑 앱 실행을 제어합니다"
-                            android:textColor="#9E9E9E"
-                            android:textSize="12sp" />
+                    <ImageView android:layout_width="40dp" android:layout_height="40dp" android:src="@android:drawable/ic_lock_lock" app:tint="#F44336" />
+                    <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="16dp" android:orientation="vertical">
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="쇼핑 앱 잠금 설정" android:textColor="@android:color/black" android:textSize="16sp" android:textStyle="bold" />
+                        <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="충동적인 쇼핑 앱 실행을 제어합니다" android:textColor="#9E9E9E" android:textSize="12sp" />
                     </LinearLayout>
-                    <ImageView
-                        android:layout_width="24dp"
-                        android:layout_height="24dp"
-                        android:src="@android:drawable/ic_media_play"
-                        app:tint="#DDDDDD" />
-                </LinearLayout>
-            </androidx.cardview.widget.CardView>
-
-            <!-- Tip Card -->
-            <androidx.cardview.widget.CardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp"
-                android:backgroundTint="#E3F2FD">
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical"
-                    android:padding="20dp">
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="💡 오늘의 팁"
-                        android:textColor="#1E88E5"
-                        android:textStyle="bold"
-                        android:textSize="14sp" />
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:text="구매하고 싶은 물건이 생기면 가짜 장바구니에 먼저 담아보세요. 7일 후에는 생각이 바뀔 수도 있습니다!"
-                        android:textColor="#1E88E5"
-                        android:textSize="13sp" />
                 </LinearLayout>
             </androidx.cardview.widget.CardView>
 
         </LinearLayout>
     </ScrollView>
 
-    <!-- Bottom Navigation (주요 기능은 하단 탭으로 이동 가정) -->
+    <!-- Bottom Navigation -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="70dp"
         android:background="@android:color/white"
         android:orientation="horizontal"
+        android:elevation="8dp"
         android:gravity="center">
         <LinearLayout
             android:id="@+id/navHome"
@@ -268,6 +155,9 @@
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackground"
             android:orientation="vertical">
             <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@android:drawable/ic_menu_today" app:tint="#4F6FFF"/>
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="홈" android:textSize="10sp" android:textColor="#4F6FFF"/>
@@ -278,6 +168,9 @@
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackground"
             android:orientation="vertical">
             <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@android:drawable/ic_menu_edit" app:tint="#9E9E9E"/>
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="예산" android:textSize="10sp" android:textColor="#9E9E9E"/>
@@ -288,6 +181,9 @@
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackground"
             android:orientation="vertical">
             <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@android:drawable/ic_menu_view" app:tint="#9E9E9E"/>
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="가짜장바구니" android:textSize="10sp" android:textColor="#9E9E9E"/>
