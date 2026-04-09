@@ -5,7 +5,7 @@
     android:layout_height="match_parent"
     android:background="#E9EFFF">
 
-    <!-- Top Bar -->
+    <!-- Top Bar: Back 버튼 제거 -->
     <LinearLayout
         android:id="@+id/topBar"
         android:layout_width="match_parent"
@@ -15,80 +15,125 @@
         android:orientation="horizontal"
         android:gravity="center_vertical"
         android:elevation="4dp">
-        <ImageView
-            android:id="@+id/btnBack"
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:padding="4dp"
-            android:src="@android:drawable/ic_menu_revert"
-            android:clickable="true"
-            android:focusable="true"
-            android:background="?attr/selectableItemBackgroundBorderless"
-            app:tint="@android:color/black" />
-        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="16dp" android:text="가짜 장바구니" android:textColor="@android:color/black" android:textSize="18sp" android:textStyle="bold" />
-        <Button android:id="@+id/btnAddProduct" android:layout_width="wrap_content" android:layout_height="40dp" android:text="+ 상품 추가" android:backgroundTint="#4F6FFF" android:textColor="@android:color/white" android:textSize="12sp" app:cornerRadius="8dp" />
+        
+        <TextView 
+            android:layout_width="0dp" 
+            android:layout_height="wrap_content" 
+            android:layout_weight="1" 
+            android:text="가짜 장바구니" 
+            android:textColor="@android:color/black" 
+            android:textSize="18sp" 
+            android:textStyle="bold" />
+
+        <Button 
+            android:id="@+id/btnAddProduct" 
+            android:layout_width="wrap_content" 
+            android:layout_height="40dp" 
+            android:text="+ 상품 추가" 
+            android:backgroundTint="#4F6FFF" 
+            android:textColor="@android:color/white" 
+            android:textSize="12sp" 
+            app:cornerRadius="8dp" />
     </LinearLayout>
 
-    <ScrollView android:layout_width="match_parent" android:layout_height="match_parent" android:layout_below="@id/topBar">
+    <ScrollView 
+        android:layout_width="match_parent" 
+        android:layout_height="match_parent" 
+        android:layout_below="@id/topBar"
+        android:layout_above="@+id/bottomNav">
         <LinearLayout android:id="@+id/cartItemsContainer" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="20dp" />
     </ScrollView>
 
-    <View android:id="@+id/dimView" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#80000000" android:visibility="gone" />
+    <!-- Bottom Navigation -->
+    <LinearLayout
+        android:id="@+id/bottomNav"
+        android:layout_width="match_parent"
+        android:layout_height="70dp"
+        android:layout_alignParentBottom="true"
+        android:background="@android:color/white"
+        android:orientation="horizontal"
+        android:elevation="8dp"
+        android:gravity="center">
+        <LinearLayout
+            android:id="@+id/navHome"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackground"
+            android:orientation="vertical">
+            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@android:drawable/ic_menu_today" app:tint="#9E9E9E"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="홈" android:textSize="10sp" android:textColor="#9E9E9E"/>
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/navBudget"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackground"
+            android:orientation="vertical">
+            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@android:drawable/ic_menu_edit" app:tint="#9E9E9E"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="예산" android:textSize="10sp" android:textColor="#9E9E9E"/>
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/navFakeCart"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackground"
+            android:orientation="vertical">
+            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@android:drawable/ic_menu_view" app:tint="#4F6FFF"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="가짜장바구니" android:textSize="10sp" android:textColor="#4F6FFF"/>
+        </LinearLayout>
+    </LinearLayout>
 
+    <!-- 배경 어둡게 및 팝업 (기존 유지) -->
+    <View android:id="@+id/dimView" android:layout_width="match_parent" android:layout_height="match_parent" android:background="#80000000" android:visibility="gone" />
     <androidx.cardview.widget.CardView android:id="@+id/cardAddProduct" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_centerInParent="true" android:layout_margin="24dp" android:visibility="gone" app:cardCornerRadius="24dp">
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="24dp">
             <RelativeLayout android:layout_width="match_parent" android:layout_height="wrap_content">
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_centerHorizontal="true" android:text="상품 추가" android:textColor="@android:color/black" android:textSize="18sp" android:textStyle="bold" />
                 <ImageView android:id="@+id/btnCloseCard" android:layout_width="24dp" android:layout_height="24dp" android:layout_alignParentEnd="true" android:src="@android:drawable/ic_menu_close_clear_cancel" />
             </RelativeLayout>
-
-            <LinearLayout android:layout_width="match_parent" android:layout_height="40dp" android:layout_marginTop="20dp" android:background="#000000" android:padding="2dp" android:orientation="horizontal">
-                <Button android:id="@+id/tabUrl" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:text="URL" android:textColor="@android:color/white" android:backgroundTint="#4F6FFF" android:textSize="12sp" />
-                <Button android:id="@+id/tabPhoto" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:text="사진" android:textColor="#FFFFFF" android:backgroundTint="#F2F4F8" android:textSize="12sp" />
-                <Button android:id="@+id/tabManual" style="?android:attr/borderlessButtonStyle" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:text="직접 입력" android:textColor="#FFFFFF" android:backgroundTint="#F2F4F8" android:textSize="12sp" />
+            <LinearLayout android:layout_width="match_parent" android:layout_height="45dp" android:layout_marginTop="20dp" android:orientation="horizontal">
+                <Button android:id="@+id/tabUrl" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:layout_marginEnd="4dp" android:text="URL" android:textSize="12sp" android:backgroundTint="#000000" android:textColor="#FFFFFF" app:cornerRadius="8dp" android:insetTop="0dp" android:insetBottom="0dp" style="@style/Widget.MaterialComponents.Button.UnelevatedButton"/>
+                <Button android:id="@+id/tabPhoto" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:layout_marginHorizontal="4dp" android:text="사진" android:textSize="12sp" android:backgroundTint="#F2F4F8" android:textColor="#666666" app:cornerRadius="8dp" android:insetTop="0dp" android:insetBottom="0dp" style="@style/Widget.MaterialComponents.Button.UnelevatedButton"/>
+                <Button android:id="@+id/tabManual" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:layout_marginStart="4dp" android:text="직접 입력" android:textSize="12sp" android:backgroundTint="#F2F4F8" android:textColor="#666666" app:cornerRadius="8dp" android:insetTop="0dp" android:insetBottom="0dp" style="@style/Widget.MaterialComponents.Button.UnelevatedButton"/>
             </LinearLayout>
-
-            <LinearLayout
-                android:id="@+id/layoutUrlInput"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                android:orientation="vertical">
-
-                <TextView
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="상품 URL"
-                    android:textColor="@android:color/black"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
-
-                <EditText
-                    android:id="@+id/etUrlInput"
-                    android:layout_width="match_parent"
-                    android:layout_height="50dp"
-                    android:layout_marginTop="8dp"
-                    android:background="#F2F4F8"
-                    android:hint="https://example.com/product"
-                    android:inputType="textUri"
-                    android:paddingStart="12dp"
-                    android:textColor="@android:color/black" />
+            <LinearLayout android:id="@+id/layoutUrlInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:orientation="vertical">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="상품 URL" android:textColor="@android:color/black" android:textSize="12sp" android:textStyle="bold" />
+                <EditText android:id="@+id/etUrlInput" android:layout_width="match_parent" android:layout_height="50dp" android:layout_marginTop="8dp" android:background="#F2F4F8" android:hint="https://example.com/product" android:inputType="text" android:paddingStart="12dp" android:textColor="#000000" />
             </LinearLayout>
-
             <LinearLayout android:id="@+id/layoutPhotoInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:visibility="gone" android:orientation="vertical" android:gravity="center">
                 <ImageView android:id="@+id/ivPhotoPreview" android:layout_width="100dp" android:layout_height="100dp" android:src="@android:drawable/ic_menu_camera" app:tint="#CCCCCC" />
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="사진 촬영 또는 갤러리 선택" android:textSize="12sp" android:textColor="#9E9E9E"/>
             </LinearLayout>
-
             <LinearLayout android:id="@+id/layoutManualInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:visibility="gone" android:orientation="vertical">
-                <EditText android:id="@+id/etManualName" android:layout_width="match_parent" android:layout_height="50dp" android:hint="상품명" android:background="#F2F4F8" android:paddingStart="12dp" android:textColor="@android:color/black" android:layout_marginBottom="8dp"/>
-                <EditText android:id="@+id/etManualPrice" android:layout_width="match_parent" android:layout_height="50dp" android:hint="가격(원)" android:inputType="number" android:background="#F2F4F8" android:paddingStart="12dp" android:textColor="@android:color/black"/>
+                <EditText android:id="@+id/etManualName" android:layout_width="match_parent" android:layout_height="50dp" android:hint="상품명" android:inputType="text" android:background="#F2F4F8" android:paddingStart="12dp" android:textColor="#000000" android:layout_marginBottom="8dp"/>
+                <EditText android:id="@+id/etManualPrice" android:layout_width="match_parent" android:layout_height="50dp" android:hint="가격(원)" android:inputType="number" android:background="#F2F4F8" android:paddingStart="12dp" android:textColor="#000000"/>
             </LinearLayout>
-
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:text="삭제까지 남은 기간" android:textSize="12sp" android:textStyle="bold" android:textColor="@android:color/black"/>
             <Spinner android:id="@+id/spExpiry" android:layout_width="match_parent" android:layout_height="50dp" android:layout_marginTop="8dp" android:background="#F2F4F8" />
-
             <Button android:id="@+id/btnSubmit" android:layout_width="match_parent" android:layout_height="55dp" android:layout_marginTop="24dp" android:backgroundTint="#4F6FFF" android:text="장바구니에 담기" android:textColor="@android:color/white" app:cornerRadius="12dp" />
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <androidx.cardview.widget.CardView android:id="@+id/cardAddReason" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_centerInParent="true" android:layout_margin="24dp" android:visibility="gone" app:cardCornerRadius="24dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="24dp">
+            <RelativeLayout android:layout_width="match_parent" android:layout_height="wrap_content">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_centerHorizontal="true" android:text="사야 하는 이유 추가" android:textColor="@android:color/black" android:textSize="18sp" android:textStyle="bold" />
+                <ImageView android:id="@+id/btnCloseReason" android:layout_width="24dp" android:layout_height="24dp" android:layout_alignParentEnd="true" android:src="@android:drawable/ic_menu_close_clear_cancel" />
+            </RelativeLayout>
+            <EditText android:id="@+id/etNewReason" android:layout_width="match_parent" android:layout_height="120dp" android:layout_marginTop="20dp" android:background="#F2F4F8" android:gravity="top" android:hint="이 상품을 왜 사고 싶나요?\n구체적으로 적으면 지름신이 물러가요!" android:inputType="textMultiLine" android:padding="12dp" android:textColor="#000000" android:textSize="14sp" />
+            <Button android:id="@+id/btnSubmitReason" android:layout_width="match_parent" android:layout_height="55dp" android:layout_marginTop="24dp" android:backgroundTint="#4F6FFF" android:text="이유 등록하기" android:textColor="@android:color/white" app:cornerRadius="12dp" />
         </LinearLayout>
     </androidx.cardview.widget.CardView>
 </RelativeLayout>

@@ -9,6 +9,7 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
+        android:layout_above="@+id/bottomNav"
         android:orientation="vertical">
 
         <!-- Top Bar -->
@@ -72,16 +73,6 @@
                     android:textColor="#9E9E9E"
                     android:textSize="14sp" />
             </LinearLayout>
-            <Button
-                android:layout_width="wrap_content"
-                android:layout_height="40dp"
-                android:backgroundTint="@android:color/white"
-                android:text="월간 리포트"
-                android:textColor="@android:color/black"
-                android:textSize="12sp"
-                app:strokeColor="#E0E0E0"
-                app:strokeWidth="1dp"
-                app:cornerRadius="8dp" />
         </LinearLayout>
 
         <!-- 계획 없음 카드 -->
@@ -116,7 +107,58 @@
         </androidx.cardview.widget.CardView>
     </LinearLayout>
 
-    <!-- 입력 카드 오버레이 -->
+    <!-- Bottom Navigation -->
+    <LinearLayout
+        android:id="@+id/bottomNav"
+        android:layout_width="match_parent"
+        android:layout_height="70dp"
+        android:layout_alignParentBottom="true"
+        android:background="@android:color/white"
+        android:orientation="horizontal"
+        android:elevation="8dp"
+        android:gravity="center">
+        <LinearLayout
+            android:id="@+id/navHome"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackground"
+            android:orientation="vertical">
+            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@android:drawable/ic_menu_today" app:tint="#9E9E9E"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="홈" android:textSize="10sp" android:textColor="#9E9E9E"/>
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/navBudget"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackground"
+            android:orientation="vertical">
+            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@android:drawable/ic_menu_edit" app:tint="#4F6FFF"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="예산" android:textSize="10sp" android:textColor="#4F6FFF"/>
+        </LinearLayout>
+        <LinearLayout
+            android:id="@+id/navFakeCart"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackground"
+            android:orientation="vertical">
+            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@android:drawable/ic_menu_view" app:tint="#9E9E9E"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="가짜장바구니" android:textSize="10sp" android:textColor="#9E9E9E"/>
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 입력 카드 팝업 -->
     <View
         android:id="@+id/dimView"
         android:layout_width="match_parent"
@@ -160,80 +202,16 @@
                     app:tint="#9E9E9E" />
             </RelativeLayout>
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center_horizontal"
-                android:layout_marginTop="4dp"
-                android:text="7일간 유효한 주간 예산 계획을 작성하세요"
-                android:textColor="#9E9E9E"
-                android:textSize="12sp" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:text="이번 주 총 예산" android:textColor="@android:color/black" android:textStyle="bold" />
+            <EditText android:id="@+id/etTotalBudget" android:layout_width="match_parent" android:layout_height="45dp" android:layout_marginTop="4dp" android:background="#F2F4F8" android:hint="예: 200000" android:inputType="number" android:paddingStart="16dp" android:textColor="@android:color/black" />
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="20dp"
-                android:text="이번 주 총 예산"
-                android:textColor="@android:color/black"
-                android:textStyle="bold" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="현재까지 지출 금액" android:textColor="@android:color/black" android:textStyle="bold" />
+            <EditText android:id="@+id/etUsedAmount" android:layout_width="match_parent" android:layout_height="45dp" android:layout_marginTop="4dp" android:background="#F2F4F8" android:hint="예: 30000" android:inputType="number" android:paddingStart="16dp" android:textColor="@android:color/black" />
 
-            <EditText
-                android:id="@+id/etTotalBudget"
-                android:layout_width="match_parent"
-                android:layout_height="45dp"
-                android:layout_marginTop="4dp"
-                android:background="#F2F4F8"
-                android:hint="예: 200000"
-                android:inputType="number"
-                android:paddingStart="16dp"
-                android:textColor="@android:color/black"
-                android:textSize="14sp" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="카테고리별 예산 설정" android:textColor="@android:color/black" android:textStyle="bold" />
+            <Spinner android:id="@+id/spCategory" android:layout_width="match_parent" android:layout_height="45dp" android:layout_marginTop="4dp" android:background="#F2F4F8" />
 
-            <!-- 지출 금액 입력 추가 -->
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:text="현재까지 지출 금액"
-                android:textColor="@android:color/black"
-                android:textStyle="bold" />
-
-            <EditText
-                android:id="@+id/etUsedAmount"
-                android:layout_width="match_parent"
-                android:layout_height="45dp"
-                android:layout_marginTop="4dp"
-                android:background="#F2F4F8"
-                android:hint="예: 3000000"
-                android:inputType="number"
-                android:paddingStart="16dp"
-                android:textColor="@android:color/black"
-                android:textSize="14sp" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:text="카테고리별 예산 설정"
-                android:textColor="@android:color/black"
-                android:textStyle="bold" />
-
-            <Spinner
-                android:id="@+id/spCategory"
-                android:layout_width="match_parent"
-                android:layout_height="45dp"
-                android:layout_marginTop="4dp"
-                android:background="#F2F4F8" />
-
-            <Button
-                android:id="@+id/btnSaveBudget"
-                android:layout_width="match_parent"
-                android:layout_height="50dp"
-                android:layout_marginTop="24dp"
-                android:backgroundTint="@android:color/black"
-                android:text="완료"
-                android:textColor="@android:color/white"
-                app:cornerRadius="8dp" />
+            <Button android:id="@+id/btnSaveBudget" android:layout_width="match_parent" android:layout_height="50dp" android:layout_marginTop="24dp" android:backgroundTint="@android:color/black" android:text="완료" android:textColor="@android:color/white" app:cornerRadius="8dp" />
         </LinearLayout>
     </androidx.cardview.widget.CardView>
 </RelativeLayout>

@@ -1,12 +1,13 @@
 package com.example.allin
 
+import android.content.Intent
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.*
-import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
 import androidx.lifecycle.lifecycleScope
@@ -25,6 +26,7 @@ class FakeCartActivity : AppCompatActivity() {
 
     private lateinit var cartItemsContainer: LinearLayout
     private lateinit var cardAddProduct: CardView
+    private lateinit var cardAddReason: CardView
     private lateinit var dimView: View
 
     private lateinit var tabUrl: Button
@@ -40,6 +42,10 @@ class FakeCartActivity : AppCompatActivity() {
     private lateinit var etManualPrice: EditText
     private lateinit var spExpiry: Spinner
     private lateinit var btnSubmit: Button
+
+    private lateinit var etNewReason: EditText
+    private lateinit var btnSubmitReason: Button
+    private var selectedProductForReason: FakeProduct? = null
 
     private lateinit var repository: FakeCartRepository
     private var currentTabIndex = 0
@@ -68,6 +74,7 @@ class FakeCartActivity : AppCompatActivity() {
         return try {
             cartItemsContainer = findViewById(R.id.cartItemsContainer)
             cardAddProduct = findViewById(R.id.cardAddProduct)
+            cardAddReason = findViewById(R.id.cardAddReason)
             dimView = findViewById(R.id.dimView)
 
             tabUrl = findViewById(R.id.tabUrl)
@@ -84,6 +91,9 @@ class FakeCartActivity : AppCompatActivity() {
             spExpiry = findViewById(R.id.spExpiry)
             btnSubmit = findViewById(R.id.btnSubmit)
 
+            etNewReason = findViewById(R.id.etNewReason)
+            btnSubmitReason = findViewById(R.id.btnSubmitReason)
+
             val expiryOptions = arrayOf("1일", "3일", "7일(권장)", "14일", "30일")
             spExpiry.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, expiryOptions)
             spExpiry.setSelection(2) 
@@ -96,28 +106,40 @@ class FakeCartActivity : AppCompatActivity() {
     private fun setupListeners() {
         findViewById<ImageView>(R.id.btnBack)?.setOnClickListener { finish() }
         findViewById<Button>(R.id.btnAddProduct)?.setOnClickListener { showAddProductPopup() }
-        findViewById<ImageView>(R.id.btnCloseCard)?.setOnClickListener { hideAddProductPopup() }
+        findViewById<ImageView>(R.id.btnCloseCard)?.setOnClickListener { hidePopups() }
+        findViewById<ImageView>(R.id.btnCloseReason)?.setOnClickListener { hidePopups() }
 
         tabUrl.setOnClickListener { selectTab(0) }
         tabPhoto.setOnClickListener { selectTab(1) }
         tabManual.setOnClickListener { selectTab(2) }
 
         btnSubmit.setOnClickListener { validateAndSaveProduct() }
+        btnSubmitReason.setOnClickListener { saveNewReason() }
+
+        // 하단 내비게이션 설정
+        findViewById<LinearLayout>(R.id.navHome).setOnClickListener {
+            startActivity(Intent(this, HomeActivity::class.java))
+            finish()
+        }
+        findViewById<LinearLayout>(R.id.navBudget).setOnClickListener {
+            startActivity(Intent(this, BudgetSetupActivity::class.java))
+            finish()
+        }
+        // 가짜장바구니는 현재 화면이므로 클릭 시 아무것도 안 함 (혹은 리프레시)
     }
 
     private fun selectTab(index: Int) {
         currentTabIndex = index
-        // [수정] 보라색 대신 검정색 배경으로 변경
-        val activeBg = Color.BLACK 
+        val activeBg = Color.BLACK
         val inactiveBg = Color.parseColor("#F2F4F8")
         val activeText = Color.WHITE
         val inactiveText = Color.parseColor("#666666")
 
-        tabUrl.setBackgroundColor(if (index == 0) activeBg else inactiveBg)
+        tabUrl.backgroundTintList = ColorStateList.valueOf(if (index == 0) activeBg else inactiveBg)
         tabUrl.setTextColor(if (index == 0) activeText else inactiveText)
-        tabPhoto.setBackgroundColor(if (index == 1) activeBg else inactiveBg)
+        tabPhoto.backgroundTintList = ColorStateList.valueOf(if (index == 1) activeBg else inactiveBg)
         tabPhoto.setTextColor(if (index == 1) activeText else inactiveText)
-        tabManual.setBackgroundColor(if (index == 2) activeBg else inactiveBg)
+        tabManual.backgroundTintList = ColorStateList.valueOf(if (index == 2) activeBg else inactiveBg)
         tabManual.setTextColor(if (index == 2) activeText else inactiveText)
 
         layoutUrlInput.visibility = if (index == 0) View.VISIBLE else View.GONE
@@ -147,7 +169,6 @@ class FakeCartActivity : AppCompatActivity() {
         for (product in products) {
             try {
                 val itemView = LayoutInflater.from(this).inflate(R.layout.item_cart_product, cartItemsContainer, false)
-                
                 val diffInMillis = (product.addedTime + TimeUnit.DAYS.toMillis(product.expiryDays.toLong())) - now
                 val diffInDays = TimeUnit.MILLISECONDS.toDays(diffInMillis)
                 val dDayText = if (diffInDays <= 0) "D-Day" else "D-$diffInDays"
@@ -163,7 +184,7 @@ class FakeCartActivity : AppCompatActivity() {
                 else product.reasons.joinToString("   ") { "• $it" }
                 itemView.findViewById<TextView>(R.id.tvReasonsSummary)?.text = reasonsText
 
-                itemView.findViewById<Button>(R.id.btnAddReason)?.setOnClickListener { showAddReasonDialog(product) }
+                itemView.findViewById<Button>(R.id.btnAddReason)?.setOnClickListener { showAddReasonPopup(product) }
                 itemView.findViewById<Button>(R.id.btnDelete)?.setOnClickListener {
                     lifecycleScope.launch { repository.delete(product) }
                 }
@@ -174,27 +195,25 @@ class FakeCartActivity : AppCompatActivity() {
         }
     }
 
-    private fun showAddReasonDialog(product: FakeProduct) {
-        val etReason = EditText(this).apply {
-            hint = "사야 하는 이유를 입력하세요"
-            setTextColor(Color.BLACK)
-            setHintTextColor(Color.GRAY)
-            val p = (20 * resources.displayMetrics.density).toInt()
-            setPadding(p, p, p, p)
-        }
+    private fun showAddReasonPopup(product: FakeProduct) {
+        selectedProductForReason = product
+        dimView.visibility = View.VISIBLE
+        cardAddReason.visibility = View.VISIBLE
+        etNewReason.setText("")
+    }
 
-        AlertDialog.Builder(this)
-            .setTitle("이유 추가")
-            .setView(etReason)
-            .setPositiveButton("추가") { _, _ ->
-                val newReason = etReason.text.toString().trim()
-                if (newReason.isNotEmpty()) {
-                    lifecycleScope.launch {
-                        repository.insert(product.copy(reasons = product.reasons + newReason))
-                    }
+    private fun saveNewReason() {
+        val reason = etNewReason.text.toString().trim()
+        val product = selectedProductForReason
+        if (reason.isNotEmpty() && product != null) {
+            lifecycleScope.launch {
+                repository.insert(product.copy(reasons = product.reasons + reason))
+                withContext(Dispatchers.Main) {
+                    hidePopups()
+                    Toast.makeText(this@FakeCartActivity, "이유가 등록되었습니다.", Toast.LENGTH_SHORT).show()
                 }
             }
-            .setNegativeButton("취소", null).show()
+        }
     }
 
     private fun validateAndSaveProduct() {
@@ -210,19 +229,13 @@ class FakeCartActivity : AppCompatActivity() {
                 0 -> {
                     url = etUrlInput.text.toString().trim()
                     if (url.isEmpty()) return@launch
-                    
                     btnSubmit.text = "분석 중..."
                     btnSubmit.isEnabled = false
-                    
                     name = withContext(Dispatchers.IO) {
                         try {
-                            val doc = Jsoup.connect(url)
-                                .timeout(5000)
-                                .get()
+                            val doc = Jsoup.connect(url).timeout(5000).get()
                             doc.title().split(":")[0].trim()
-                        } catch (e: Exception) {
-                            "분석된 상품"
-                        }
+                        } catch (e: Exception) { "분석된 상품" }
                     }
                     btnSubmit.isEnabled = true
                 }
@@ -248,7 +261,7 @@ class FakeCartActivity : AppCompatActivity() {
             )
             repository.insert(product)
             withContext(Dispatchers.Main) { 
-                hideAddProductPopup()
+                hidePopups()
                 Toast.makeText(this@FakeCartActivity, "장바구니에 추가되었습니다.", Toast.LENGTH_SHORT).show()
             }
         }
@@ -259,10 +272,11 @@ class FakeCartActivity : AppCompatActivity() {
         cardAddProduct.visibility = View.VISIBLE
     }
 
-    private fun hideAddProductPopup() {
+    private fun hidePopups() {
         dimView.visibility = View.GONE
         cardAddProduct.visibility = View.GONE
+        cardAddReason.visibility = View.GONE
         etUrlInput.setText(""); etManualName.setText(""); etManualPrice.setText("")
-        selectTab(currentTabIndex) // 버튼 텍스트 복구
+        selectTab(currentTabIndex)
     }
 }
