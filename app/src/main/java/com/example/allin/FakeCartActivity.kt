@@ -125,6 +125,13 @@ class FakeCartActivity : AppCompatActivity() {
         btnSubmit.setOnClickListener { validateAndSaveProduct() }
         btnSubmitReason.setOnClickListener { saveNewReason() }
 
+        // E1: 스크린샷 추가 시 카테고리 분류 오류 시나리오 대응
+        layoutPhotoInput.setOnClickListener {
+            showErrorDialog("카테고리 분류 오류 가능성", "카테고리 분류 오류 가능성이 있습니다. 직접 재분류하시겠습니까?") {
+                selectTab(2) // 수동 입력 탭으로 이동
+            }
+        }
+
         findViewById<LinearLayout>(R.id.navHome).setOnClickListener {
             startActivity(Intent(this, HomeActivity::class.java))
             finish()
@@ -193,14 +200,16 @@ class FakeCartActivity : AppCompatActivity() {
 
                 itemView.findViewById<Button>(R.id.btnAddReason)?.setOnClickListener { showAddReasonPopup(product) }
                 
-                // [수정] btnDelete 대신 btnOptions (점 3개 버튼) 사용
+                // [수정] 옵션 메뉴에 '기간 연장' 추가 (A5)
                 itemView.findViewById<ImageButton>(R.id.btnOptions)?.setOnClickListener { view ->
                     val popup = PopupMenu(this, view)
                     popup.menu.add("수정")
+                    popup.menu.add("기간 연장")
                     popup.menu.add("삭제")
                     popup.setOnMenuItemClickListener { item ->
                         when (item.title) {
                             "수정" -> showEditProductPopup(product)
+                            "기간 연장" -> showExtendPeriodDialog(product)
                             "삭제" -> showDeleteConfirmDialog(product)
                         }
                         true
@@ -213,6 +222,25 @@ class FakeCartActivity : AppCompatActivity() {
                 Log.e("FakeCartActivity", "Error rendering item", e)
             }
         }
+    }
+
+    // A5: 가짜 장바구니 시간 연장 다이얼로그
+    private fun showExtendPeriodDialog(product: FakeProduct) {
+        val options = arrayOf("1일 연장", "3일 연장", "7일 연장", "14일 연장")
+        AlertDialog.Builder(this)
+            .setTitle("숙고 기간 연장")
+            .setItems(options) { _, which ->
+                val addedDays = when(which) {
+                    0 -> 1; 1 -> 3; 2 -> 7; else -> 14
+                }
+                lifecycleScope.launch {
+                    val updatedProduct = product.copy(expiryDays = product.expiryDays + addedDays)
+                    repository.insert(updatedProduct)
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@FakeCartActivity, "${addedDays}일 연장되었습니다.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }.show()
     }
 
     private fun showDeleteConfirmDialog(product: FakeProduct) {
@@ -284,11 +312,25 @@ class FakeCartActivity : AppCompatActivity() {
                     if (url.isEmpty()) return@launch
                     btnSubmit.text = if (editingProduct != null) "수정 중..." else "분석 중..."
                     btnSubmit.isEnabled = false
-                    name = withContext(Dispatchers.IO) {
-                        try {
+                    
+                    try {
+                        name = withContext(Dispatchers.IO) {
                             val doc = Jsoup.connect(url).timeout(5000).get()
                             doc.title().split(":")[0].trim()
-                        } catch (e: Exception) { "분석된 상품" }
+                        }
+                    } catch (e: Exception) {
+                        // E2, E3: URL 정보 로드 실패 또는 네트워크 오류 처리
+                        withContext(Dispatchers.Main) {
+                            btnSubmit.isEnabled = true
+                            btnSubmit.text = if (editingProduct != null) "수정 완료" else "URL에서 상품 정보 가져오기"
+                            showErrorDialog(
+                                "상품 정보를 불러올 수 없습니다.",
+                                "네트워크 오류 또는 지원하지 않는 URL입니다. 직접 입력하시겠습니까?"
+                            ) {
+                                selectTab(2) // 직접 입력 탭으로 이동
+                            }
+                        }
+                        return@launch
                     }
                     btnSubmit.isEnabled = true
                 }
@@ -329,6 +371,16 @@ class FakeCartActivity : AppCompatActivity() {
                 editingProduct = null
             }
         }
+    }
+
+    // 공통 오류 알림 다이얼로그 (E1, E2, E3 대응)
+    private fun showErrorDialog(title: String, message: String, onPositive: () -> Unit) {
+        AlertDialog.Builder(this)
+            .setTitle(title)
+            .setMessage(message)
+            .setPositiveButton("직접 입력/재분류") { _, _ -> onPositive() }
+            .setNegativeButton("취소", null)
+            .show()
     }
 
     private fun showAddProductPopup() {
