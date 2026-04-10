@@ -8,19 +8,18 @@ import com.google.gson.reflect.TypeToken
 
 @Entity(tableName = "fake_products")
 data class FakeProduct(
-    @PrimaryKey val id: String,
-    val name: String,
-    val category: String,
-    val price: Int,
+    @PrimaryKey val id: String = "",
+    val name: String = "",
+    val category: String = "",
+    val price: Int = 0,
     val imageUrl: String = "",
     val url: String = "",
     val status: String = "구매 예정",
     val addedTime: Long = System.currentTimeMillis(),
     val expiryDays: Int = 7,
-    val reasons: List<String> = emptyList() // [변경] 고정된 5개 대신 리스트로 변경
+    val reasons: List<String> = emptyList()
 )
 
-// Room에서 리스트를 저장하기 위한 컨버터
 class Converters {
     @TypeConverter
     fun fromString(value: String): List<String> {

@@ -40,7 +40,6 @@
                 android:layout_marginStart="16dp"
                 android:orientation="vertical">
 
-                <!-- 남은 기간 표시 (D-Day) -->
                 <TextView
                     android:id="@+id/tvRemainingDays"
                     android:layout_width="wrap_content"
@@ -78,13 +77,15 @@
                     android:ellipsize="end" />
             </LinearLayout>
 
-            <!-- 삭제 버튼: 쓰레기통 모양을 파란색(#4F6FFF)으로 변경 -->
-            <Button
-                android:id="@+id/btnDelete"
+            <!-- [수정] 점 3개 버튼 (옵션 버튼) -->
+            <ImageButton
+                android:id="@+id/btnOptions"
                 android:layout_width="40dp"
                 android:layout_height="40dp"
-                android:background="@android:drawable/ic_menu_delete"
-                android:backgroundTint="#4F6FFF" />
+                android:background="?attr/selectableItemBackgroundBorderless"
+                android:src="@android:drawable/ic_menu_more"
+                android:contentDescription="옵션"
+                app:tint="#9E9E9E" />
         </LinearLayout>
 
         <View

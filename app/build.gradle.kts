@@ -45,6 +45,7 @@ dependencies {
     // Firebase
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth.ktx)
+    implementation("com.google.firebase:firebase-firestore-ktx") // [추가] Firestore 라이브러리
 
     // 웹페이지 정보 추출 및 비동기
     implementation("org.jsoup:jsoup:1.16.1")
@@ -63,7 +64,7 @@ dependencies {
     // WorkManager
     implementation("androidx.work:work-runtime-ktx:2.9.0")
 
-    // [추가] Gson (데이터 리스트 저장용)
+    // Gson (데이터 리스트 저장용)
     implementation("com.google.code.gson:gson:2.10.1")
 
     testImplementation(libs.junit)

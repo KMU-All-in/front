@@ -8,12 +8,13 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.*
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
 import androidx.lifecycle.lifecycleScope
 import com.example.allin.data.FakeCartRepository
 import com.example.allin.data.FakeProduct
-import com.example.allin.data.FakeProductDatabase
+import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -49,14 +50,23 @@ class FakeCartActivity : AppCompatActivity() {
 
     private lateinit var repository: FakeCartRepository
     private var currentTabIndex = 0
+    
+    // 수정 모드를 위한 변수
+    private var editingProduct: FakeProduct? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_fake_cart)
 
+        if (FirebaseAuth.getInstance().currentUser == null) {
+            Toast.makeText(this, "로그인이 필요한 서비스입니다.", Toast.LENGTH_SHORT).show()
+            startActivity(Intent(this, AllInActivity::class.java))
+            finish()
+            return
+        }
+
         try {
-            val database = FakeProductDatabase.getDatabase(this)
-            repository = FakeCartRepository(database.fakeProductDao())
+            repository = FakeCartRepository()
 
             if (!initViews()) return
             setupListeners()
@@ -104,7 +114,6 @@ class FakeCartActivity : AppCompatActivity() {
     }
 
     private fun setupListeners() {
-        findViewById<ImageView>(R.id.btnBack)?.setOnClickListener { finish() }
         findViewById<Button>(R.id.btnAddProduct)?.setOnClickListener { showAddProductPopup() }
         findViewById<ImageView>(R.id.btnCloseCard)?.setOnClickListener { hidePopups() }
         findViewById<ImageView>(R.id.btnCloseReason)?.setOnClickListener { hidePopups() }
@@ -116,7 +125,6 @@ class FakeCartActivity : AppCompatActivity() {
         btnSubmit.setOnClickListener { validateAndSaveProduct() }
         btnSubmitReason.setOnClickListener { saveNewReason() }
 
-        // 하단 내비게이션 설정
         findViewById<LinearLayout>(R.id.navHome).setOnClickListener {
             startActivity(Intent(this, HomeActivity::class.java))
             finish()
@@ -125,7 +133,6 @@ class FakeCartActivity : AppCompatActivity() {
             startActivity(Intent(this, BudgetSetupActivity::class.java))
             finish()
         }
-        // 가짜장바구니는 현재 화면이므로 클릭 시 아무것도 안 함 (혹은 리프레시)
     }
 
     private fun selectTab(index: Int) {
@@ -146,7 +153,7 @@ class FakeCartActivity : AppCompatActivity() {
         layoutPhotoInput.visibility = if (index == 1) View.VISIBLE else View.GONE
         layoutManualInput.visibility = if (index == 2) View.VISIBLE else View.GONE
 
-        btnSubmit.text = when(index) {
+        btnSubmit.text = if (editingProduct != null) "수정 완료" else when(index) {
             0 -> "URL에서 상품 정보 가져오기"
             1 -> "사진 선택하기"
             else -> "장바구니에 담기"
@@ -181,18 +188,64 @@ class FakeCartActivity : AppCompatActivity() {
                 tvUrl?.text = if(product.url.isNullOrEmpty()) "직접 입력됨" else product.url
 
                 val reasonsText = if (product.reasons.isEmpty()) "아직 작성된 이유가 없습니다."
-                else product.reasons.joinToString("   ") { "• $it" }
+                else product.reasons.joinToString("\n") { "• $it" }
                 itemView.findViewById<TextView>(R.id.tvReasonsSummary)?.text = reasonsText
 
                 itemView.findViewById<Button>(R.id.btnAddReason)?.setOnClickListener { showAddReasonPopup(product) }
-                itemView.findViewById<Button>(R.id.btnDelete)?.setOnClickListener {
-                    lifecycleScope.launch { repository.delete(product) }
+                
+                // [수정] btnDelete 대신 btnOptions (점 3개 버튼) 사용
+                itemView.findViewById<ImageButton>(R.id.btnOptions)?.setOnClickListener { view ->
+                    val popup = PopupMenu(this, view)
+                    popup.menu.add("수정")
+                    popup.menu.add("삭제")
+                    popup.setOnMenuItemClickListener { item ->
+                        when (item.title) {
+                            "수정" -> showEditProductPopup(product)
+                            "삭제" -> showDeleteConfirmDialog(product)
+                        }
+                        true
+                    }
+                    popup.show()
                 }
+                
                 cartItemsContainer.addView(itemView)
             } catch (e: Exception) {
                 Log.e("FakeCartActivity", "Error rendering item", e)
             }
         }
+    }
+
+    private fun showDeleteConfirmDialog(product: FakeProduct) {
+        AlertDialog.Builder(this)
+            .setTitle("상품 삭제")
+            .setMessage("'${product.name}'을(를) 삭제하시겠습니까?")
+            .setPositiveButton("삭제") { _, _ ->
+                lifecycleScope.launch { repository.delete(product) }
+            }
+            .setNegativeButton("취소", null)
+            .show()
+    }
+
+    private fun showEditProductPopup(product: FakeProduct) {
+        editingProduct = product
+        dimView.visibility = View.VISIBLE
+        cardAddProduct.visibility = View.VISIBLE
+        
+        // 기존 정보 채우기
+        if (product.url.isNotEmpty()) {
+            selectTab(0)
+            etUrlInput.setText(product.url)
+        } else {
+            selectTab(2)
+            etManualName.setText(product.name)
+            etManualPrice.setText(product.price.toString())
+        }
+        
+        val expiryIndex = when(product.expiryDays) {
+            1 -> 0; 3 -> 1; 14 -> 3; 30 -> 4; else -> 2
+        }
+        spExpiry.setSelection(expiryIndex)
+        btnSubmit.text = "수정 완료"
     }
 
     private fun showAddReasonPopup(product: FakeProduct) {
@@ -229,7 +282,7 @@ class FakeCartActivity : AppCompatActivity() {
                 0 -> {
                     url = etUrlInput.text.toString().trim()
                     if (url.isEmpty()) return@launch
-                    btnSubmit.text = "분석 중..."
+                    btnSubmit.text = if (editingProduct != null) "수정 중..." else "분석 중..."
                     btnSubmit.isEnabled = false
                     name = withContext(Dispatchers.IO) {
                         try {
@@ -245,10 +298,18 @@ class FakeCartActivity : AppCompatActivity() {
                     if (name.isEmpty() || priceStr.isEmpty()) return@launch
                     price = priceStr.toIntOrNull() ?: 0
                 }
-                else -> return@launch 
+                else -> {
+                    Toast.makeText(this@FakeCartActivity, "준비 중인 기능입니다.", Toast.LENGTH_SHORT).show()
+                    return@launch 
+                }
             }
 
-            val product = FakeProduct(
+            val product = editingProduct?.copy(
+                name = name,
+                price = price,
+                url = url,
+                expiryDays = expiryDays
+            ) ?: FakeProduct(
                 id = UUID.randomUUID().toString(),
                 name = name,
                 category = "기타",
@@ -259,17 +320,25 @@ class FakeCartActivity : AppCompatActivity() {
                 addedTime = System.currentTimeMillis(),
                 reasons = emptyList()
             )
+
             repository.insert(product)
             withContext(Dispatchers.Main) { 
                 hidePopups()
-                Toast.makeText(this@FakeCartActivity, "장바구니에 추가되었습니다.", Toast.LENGTH_SHORT).show()
+                val msg = if (editingProduct != null) "수정되었습니다." else "장바구니에 추가되었습니다."
+                Toast.makeText(this@FakeCartActivity, msg, Toast.LENGTH_SHORT).show()
+                editingProduct = null
             }
         }
     }
 
     private fun showAddProductPopup() {
+        editingProduct = null
         dimView.visibility = View.VISIBLE
         cardAddProduct.visibility = View.VISIBLE
+        etUrlInput.setText("")
+        etManualName.setText("")
+        etManualPrice.setText("")
+        btnSubmit.text = "장바구니에 담기"
     }
 
     private fun hidePopups() {
@@ -277,6 +346,7 @@ class FakeCartActivity : AppCompatActivity() {
         cardAddProduct.visibility = View.GONE
         cardAddReason.visibility = View.GONE
         etUrlInput.setText(""); etManualName.setText(""); etManualPrice.setText("")
+        editingProduct = null
         selectTab(currentTabIndex)
     }
 }
