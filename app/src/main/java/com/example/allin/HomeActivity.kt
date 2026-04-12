@@ -3,12 +3,16 @@ package com.example.allin
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.view.View
 import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import java.text.DecimalFormat
 
 class HomeActivity : AppCompatActivity() {
@@ -22,9 +26,23 @@ class HomeActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_home)
 
+        hideSystemBars()
         initViews()
         setupListeners()
         updateBudgetData()
+    }
+
+    private fun hideSystemBars() {
+        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
+        windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) {
+            hideSystemBars()
+        }
     }
 
     private fun initViews() {
@@ -47,12 +65,16 @@ class HomeActivity : AppCompatActivity() {
 
         // 하단 탭: 예산 설정
         findViewById<LinearLayout>(R.id.navBudget).setOnClickListener {
-            startActivity(Intent(this, BudgetSetupActivity::class.java))
+            val intent = Intent(this, BudgetSetupActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            startActivity(intent)
         }
 
         // 하단 탭: 가짜 장바구니
         findViewById<LinearLayout>(R.id.navFakeCart).setOnClickListener {
-            startActivity(Intent(this, FakeCartActivity::class.java))
+            val intent = Intent(this, FakeCartActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            startActivity(intent)
         }
     }
 
