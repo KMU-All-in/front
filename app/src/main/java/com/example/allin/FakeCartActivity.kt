@@ -60,7 +60,9 @@ class FakeCartActivity : AppCompatActivity() {
 
         if (FirebaseAuth.getInstance().currentUser == null) {
             Toast.makeText(this, "로그인이 필요한 서비스입니다.", Toast.LENGTH_SHORT).show()
-            startActivity(Intent(this, AllInActivity::class.java))
+            val intent = Intent(this, AllInActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            startActivity(intent)
             finish()
             return
         }
@@ -132,13 +134,21 @@ class FakeCartActivity : AppCompatActivity() {
             }
         }
 
+        // 하단 네비게이션
         findViewById<LinearLayout>(R.id.navHome).setOnClickListener {
-            startActivity(Intent(this, HomeActivity::class.java))
-            finish()
+            val intent = Intent(this, HomeActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            startActivity(intent)
+            overridePendingTransition(0, 0)
         }
         findViewById<LinearLayout>(R.id.navBudget).setOnClickListener {
-            startActivity(Intent(this, BudgetSetupActivity::class.java))
-            finish()
+            val intent = Intent(this, BudgetSetupActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            startActivity(intent)
+            overridePendingTransition(0, 0)
+        }
+        findViewById<LinearLayout>(R.id.navFakeCart).setOnClickListener {
+            // 현재 화면
         }
     }
 
