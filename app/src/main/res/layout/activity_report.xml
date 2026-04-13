@@ -6,27 +6,39 @@
     android:background="#E9EFFF"
     android:orientation="vertical">
 
-    <!-- Top Bar -->
+    <!-- Top Bar with Close Button -->
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@android:color/white"
-        android:padding="20dp"
+        android:padding="16dp"
         android:orientation="horizontal"
         android:gravity="center_vertical">
+        
         <TextView
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
+            android:layout_weight="1"
             android:text="소비 분석 리포트"
             android:textColor="@android:color/black"
             android:textSize="18sp"
             android:textStyle="bold" />
+
+        <ImageView
+            android:id="@+id/btnCloseReport"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:padding="4dp"
+            app:tint="@android:color/black"
+            android:clickable="true"
+            android:focusable="true"
+            android:background="?attr/selectableItemBackgroundBorderless" />
     </LinearLayout>
 
     <ScrollView
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
+        android:layout_height="match_parent"
         android:fillViewport="true">
 
         <LinearLayout
@@ -129,66 +141,4 @@
 
         </LinearLayout>
     </ScrollView>
-
-    <!-- Bottom Navigation -->
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="70dp"
-        android:background="@android:color/white"
-        android:orientation="horizontal"
-        android:elevation="8dp"
-        android:gravity="center">
-        <LinearLayout
-            android:id="@+id/navHome"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:orientation="vertical"
-            android:clickable="true"
-            android:focusable="true"
-            android:background="?attr/selectableItemBackground">
-            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@android:drawable/ic_menu_today" app:tint="#9E9E9E"/>
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="홈" android:textSize="10sp" android:textColor="#9E9E9E"/>
-        </LinearLayout>
-        <LinearLayout
-            android:id="@+id/navBudget"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:orientation="vertical"
-            android:clickable="true"
-            android:focusable="true"
-            android:background="?attr/selectableItemBackground">
-            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@android:drawable/ic_menu_edit" app:tint="#9E9E9E"/>
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="예산" android:textSize="10sp" android:textColor="#9E9E9E"/>
-        </LinearLayout>
-        <LinearLayout
-            android:id="@+id/navReport"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:orientation="vertical"
-            android:clickable="true"
-            android:focusable="true"
-            android:background="?attr/selectableItemBackground">
-            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@android:drawable/ic_menu_sort_by_size" app:tint="#4F6FFF"/>
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="리포트" android:textSize="10sp" android:textColor="#4F6FFF"/>
-        </LinearLayout>
-        <LinearLayout
-            android:id="@+id/navFakeCart"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:orientation="vertical"
-            android:clickable="true"
-            android:focusable="true"
-            android:background="?attr/selectableItemBackground">
-            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@android:drawable/ic_menu_view" app:tint="#9E9E9E"/>
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="가짜장바구니" android:textSize="10sp" android:textColor="#9E9E9E"/>
-        </LinearLayout>
-    </LinearLayout>
 </LinearLayout>

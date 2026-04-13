@@ -1,10 +1,8 @@
 package com.example.allin
 
 import android.content.Context
-import android.content.Intent
 import android.os.Bundle
-import android.view.View
-import android.widget.LinearLayout
+import android.widget.ImageView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.view.WindowCompat
@@ -32,7 +30,7 @@ class ReportActivity : AppCompatActivity() {
         hideSystemBars()
         initViews()
         loadAndAnalyzeData()
-        setupNavigation()
+        setupListeners()
     }
 
     private fun hideSystemBars() {
@@ -78,24 +76,12 @@ class ReportActivity : AppCompatActivity() {
         pieChart.setData(result.categorySums)
     }
 
-    private fun setupNavigation() {
-        findViewById<LinearLayout>(R.id.navHome)?.setOnClickListener {
-            val intent = Intent(this, HomeActivity::class.java)
-            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-            startActivity(intent)
+    private fun setupListeners() {
+        // X 버튼 클릭 시 리포트 화면 닫기
+        findViewById<ImageView>(R.id.btnCloseReport)?.setOnClickListener {
             finish()
-        }
-        findViewById<LinearLayout>(R.id.navBudget)?.setOnClickListener {
-            val intent = Intent(this, BudgetSetupActivity::class.java)
-            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-            startActivity(intent)
-            finish()
-        }
-        findViewById<LinearLayout>(R.id.navFakeCart)?.setOnClickListener {
-            val intent = Intent(this, FakeCartActivity::class.java)
-            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-            startActivity(intent)
-            finish()
+            // 닫힐 때 애니메이션을 아래로 내려가는 식으로 하고 싶다면 추가 가능
+            // overridePendingTransition(0, R.anim.slide_out_bottom) 
         }
     }
 }
