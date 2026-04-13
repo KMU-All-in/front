@@ -37,22 +37,39 @@ class HomeActivity : AppCompatActivity() {
     private fun setupListeners() {
         // 우측 상단 설정 아이콘
         findViewById<ImageView>(R.id.ivSettings).setOnClickListener {
-            startActivity(Intent(this, SettingsActivity::class.java))
+            val intent = Intent(this, SettingsActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            startActivity(intent)
+            overridePendingTransition(0, 0)
         }
 
         // 앱 잠금 메뉴
         findViewById<CardView>(R.id.menuAppLock).setOnClickListener {
-            // startActivity(Intent(this, AppLockActivity::class.java)) // 잠금 액티비티 연결 시 주석 해제
+            // val intent = Intent(this, AppLockActivity::class.java)
+            // intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            // startActivity(intent)
+            // overridePendingTransition(0, 0)
+        }
+
+        // 하단 탭: 홈 (이미 홈이므로 필요 시 처리)
+        findViewById<LinearLayout>(R.id.navHome).setOnClickListener {
+            // 현재 화면이므로 아무것도 하지 않거나 스크롤 맨 위로 이동
         }
 
         // 하단 탭: 예산 설정
         findViewById<LinearLayout>(R.id.navBudget).setOnClickListener {
-            startActivity(Intent(this, BudgetSetupActivity::class.java))
+            val intent = Intent(this, BudgetSetupActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            startActivity(intent)
+            overridePendingTransition(0, 0)
         }
 
         // 하단 탭: 가짜 장바구니
         findViewById<LinearLayout>(R.id.navFakeCart).setOnClickListener {
-            startActivity(Intent(this, FakeCartActivity::class.java))
+            val intent = Intent(this, FakeCartActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            startActivity(intent)
+            overridePendingTransition(0, 0)
         }
     }
 
