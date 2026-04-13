@@ -29,10 +29,10 @@
         <activity android:name=".PasswordSetupActivity" />
         <activity android:name=".HomeActivity" />
         
-        <!-- [추가] 누락된 액티비티 등록 -->
         <activity android:name=".SettingsActivity" />
         <activity android:name=".BudgetSetupActivity" />
-        
+        <activity android:name=".ReportActivity" />
+
         <activity 
             android:name=".FakeCartActivity"
             android:exported="true">

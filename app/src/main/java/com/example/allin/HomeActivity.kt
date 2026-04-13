@@ -51,9 +51,9 @@ class HomeActivity : AppCompatActivity() {
             // overridePendingTransition(0, 0)
         }
 
-        // 하단 탭: 홈 (이미 홈이므로 필요 시 처리)
+        // 하단 탭: 홈
         findViewById<LinearLayout>(R.id.navHome).setOnClickListener {
-            // 현재 화면이므로 아무것도 하지 않거나 스크롤 맨 위로 이동
+            // 현재 화면이므로 무시
         }
 
         // 하단 탭: 예산 설정
