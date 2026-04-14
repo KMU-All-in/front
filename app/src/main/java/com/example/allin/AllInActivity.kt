@@ -1,5 +1,7 @@
 package com.example.allin
 
+// 테스트 주섣
+
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
