@@ -1,7 +1,7 @@
 package com.example.allin
 
-import android.content.Context
 import android.os.Bundle
+import android.util.Log
 import android.widget.ImageView
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
@@ -11,8 +11,9 @@ import androidx.core.view.WindowInsetsControllerCompat
 import com.example.allin.data.BudgetAnalyzer
 import com.example.allin.data.Payment
 import com.example.allin.ui.PieChartView
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.Query
 import java.text.DecimalFormat
 
 class ReportActivity : AppCompatActivity() {
@@ -22,6 +23,9 @@ class ReportActivity : AppCompatActivity() {
     private lateinit var tvBudgetUsage: TextView
     private lateinit var tvRecommendations: TextView
     private val budgetAnalyzer = BudgetAnalyzer()
+    
+    private val db = FirebaseFirestore.getInstance()
+    private val auth = FirebaseAuth.getInstance()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -29,7 +33,7 @@ class ReportActivity : AppCompatActivity() {
 
         hideSystemBars()
         initViews()
-        loadAndAnalyzeData()
+        loadAndAnalyzeDataFromFirestore()
         setupListeners()
     }
 
@@ -53,35 +57,64 @@ class ReportActivity : AppCompatActivity() {
         tvRecommendations = findViewById<TextView>(R.id.tvRecommendations)
     }
 
-    private fun loadAndAnalyzeData() {
-        val sharedPref = getSharedPreferences("BudgetPrefs", Context.MODE_PRIVATE)
-        val totalBudget = sharedPref.getInt("TOTAL_BUDGET", 0)
-        
-        val paymentsJson = sharedPref.getString("PAYMENTS_LIST", null)
-        val payments: List<Payment> = if (paymentsJson != null) {
-            val type = object : TypeToken<List<Payment>>() {}.type
-            Gson().fromJson(paymentsJson, type)
-        } else {
-            emptyList()
-        }
+    private fun loadAndAnalyzeDataFromFirestore() {
+        val currentUser = auth.currentUser ?: return
 
-        val result = budgetAnalyzer.analyze(payments, totalBudget)
+        // 1. 리포트 데이터(총 예산) 가져오기
+        db.collection("users").document(currentUser.uid)
+            .collection("reports")
+            .orderBy("start_date", Query.Direction.DESCENDING)
+            .limit(1)
+            .get()
+            .addOnSuccessListener { reportSnapshots ->
+                if (!reportSnapshots.isEmpty) {
+                    val reportDoc = reportSnapshots.documents[0]
+                    val totalBudget = reportDoc.getLong("budget_usage")?.toInt() ?: 0
 
+                    // 2. 개별 지출 내역(transactions) 가져와서 카테고리별 합산
+                    db.collection("users").document(currentUser.uid)
+                        .collection("transactions")
+                        .get()
+                        .addOnSuccessListener { transSnapshots ->
+                            val categorySums = mutableMapOf<String, Int>()
+                            var totalSpent = 0
+                            
+                            for (doc in transSnapshots.documents) {
+                                val amount = doc.getLong("amount")?.toInt() ?: 0
+                                val category = doc.getString("category") ?: "기타"
+                                categorySums[category] = categorySums.getOrDefault(category, 0) + amount
+                                totalSpent += amount
+                            }
+
+                            // 3. UI 업데이트 및 차트 그리기
+                            updateUI(totalSpent, totalBudget, categorySums)
+                        }
+                }
+            }
+    }
+
+    private fun updateUI(totalSpent: Int, totalBudget: Int, categorySums: Map<String, Int>) {
         val dec = DecimalFormat("#,###")
-        tvTotalConsumption.text = "총 소비액: ${dec.format(result.totalConsumption)}원"
-        tvBudgetUsage.text = "예산 사용률: ${result.budgetUsagePercent}%"
+        tvTotalConsumption.text = "총 소비액: ${dec.format(totalSpent)}원"
         
-        tvRecommendations.text = result.recommendations.joinToString("\n\n")
+        val usagePercent = if (totalBudget > 0) (totalSpent.toFloat() / totalBudget.toFloat() * 100).toInt() else 0
+        tvBudgetUsage.text = "예산 사용률: $usagePercent%"
+        
+        // 간단한 추천 메시지 생성
+        val recommendations = mutableListOf<String>()
+        if (usagePercent > 100) recommendations.add("예산을 초과했습니다! 지출을 즉시 줄여야 합니다.")
+        else if (usagePercent > 80) recommendations.add("예산의 80% 이상을 사용했습니다. 주의가 필요합니다.")
+        else recommendations.add("현재 예산 내에서 아주 잘 소비하고 있습니다!")
+        
+        tvRecommendations.text = recommendations.joinToString("\n\n")
 
-        pieChart.setData(result.categorySums)
+        // 수정한 PieChartView에 데이터 전달 (남은 예산 포함해서 그려줌)
+        pieChart.setData(categorySums, totalBudget)
     }
 
     private fun setupListeners() {
-        // X 버튼 클릭 시 리포트 화면 닫기
         findViewById<ImageView>(R.id.btnCloseReport)?.setOnClickListener {
             finish()
-            // 닫힐 때 애니메이션을 아래로 내려가는 식으로 하고 싶다면 추가 가능
-            // overridePendingTransition(0, R.anim.slide_out_bottom) 
         }
     }
 }
