@@ -55,12 +55,12 @@ class HomeActivity : AppCompatActivity() {
             overridePendingTransition(0, 0)
         }
 
-        // 앱 잠금 메뉴
+        // 앱 잠금 메뉴 (S1, S2 시나리오 대응)
         findViewById<CardView>(R.id.menuAppLock).setOnClickListener {
-            // val intent = Intent(this, AppLockActivity::class.java)
-            // intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-            // startActivity(intent)
-            // overridePendingTransition(0, 0)
+            val intent = Intent(this, AppLockActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            startActivity(intent)
+            overridePendingTransition(0, 0)
         }
 
         // 하단 탭: 홈

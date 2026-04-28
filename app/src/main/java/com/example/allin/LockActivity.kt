@@ -1,0 +1,145 @@
+package com.example.allin
+
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.os.Build
+import android.os.Bundle
+import android.view.View
+import android.widget.Button
+import android.widget.ImageButton
+import android.widget.ImageView
+import android.widget.TextView
+import android.widget.Toast
+import androidx.appcompat.app.AppCompatActivity
+import androidx.core.app.NotificationCompat
+
+class LockActivity : AppCompatActivity() {
+
+    private lateinit var tvLockAdvice: TextView
+    private lateinit var pinIndicatorContainer: android.widget.LinearLayout
+    private var currentPin = ""
+    private val correctPin = "1234" // 임시 비밀번호 (추후 DB 연동)
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_lock)
+
+        tvLockAdvice = findViewById(R.id.tvLockAdvice)
+        pinIndicatorContainer = findViewById(R.id.pinIndicatorContainer)
+
+        setupKeypad()
+        updatePinIndicators()
+    }
+
+    private fun setupKeypad() {
+        // XML에서 버튼들에 android:tag를 수동으로 넣거나, 직접 ID 없이 텍스트로 찾기 힘드므로 
+        // 런타임에 모든 버튼을 순회하며 숫자 텍스트를 가진 버튼에 리스너 등록
+        findAndSetNumericButtons(findViewById(android.R.id.content))
+
+        findViewById<ImageButton>(R.id.btnBackspace).setOnClickListener {
+            if (currentPin.isNotEmpty()) {
+                currentPin = currentPin.substring(0, currentPin.length - 1)
+                updatePinIndicators()
+            }
+        }
+    }
+
+    private fun findAndSetNumericButtons(view: View) {
+        if (view is android.view.ViewGroup) {
+            for (i in 0 until view.childCount) {
+                findAndSetNumericButtons(view.getChildAt(i))
+            }
+        } else if (view is Button) {
+            val text = view.text.toString()
+            if (text.length == 1 && text[0].isDigit()) {
+                view.setOnClickListener {
+                    if (currentPin.length < 4) {
+                        currentPin += text
+                        updatePinIndicators()
+                        if (currentPin.length == 4) {
+                            verifyPin()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private fun updatePinIndicators() {
+        for (i in 0 until pinIndicatorContainer.childCount) {
+            val dot = pinIndicatorContainer.getChildAt(i)
+            if (i < currentPin.length) {
+                dot.setBackgroundResource(R.drawable.pin_dot_on)
+            } else {
+                dot.setBackgroundResource(R.drawable.pin_dot_off)
+            }
+        }
+    }
+
+    private fun verifyPin() {
+        if (currentPin == correctPin) {
+            Toast.makeText(this, "잠금 해제되었습니다.", Toast.LENGTH_SHORT).show()
+            resetFailCount()
+            finish()
+        } else {
+            handleFail()
+            currentPin = ""
+            updatePinIndicators()
+            Toast.makeText(this, "비밀번호가 틀렸습니다.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    private fun handleFail() {
+        val sharedPref = getSharedPreferences("LockPrefs", Context.MODE_PRIVATE)
+        val failCount = sharedPref.getInt("FAIL_COUNT", 0) + 1
+        sharedPref.edit().putInt("FAIL_COUNT", failCount).apply()
+
+        if (failCount == 5 || failCount == 8 || failCount == 10) {
+            showFailNotification(failCount)
+        }
+    }
+
+    private fun resetFailCount() {
+        val sharedPref = getSharedPreferences("LockPrefs", Context.MODE_PRIVATE)
+        sharedPref.edit().putInt("FAIL_COUNT", 0).apply()
+    }
+
+    private fun showFailNotification(count: Int) {
+        val channelId = "LockFailChannel"
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(channelId, "보안 알림", NotificationManager.IMPORTANCE_HIGH)
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        // 알림 클릭 시 비밀번호 변경(AppLockActivity)으로 이동
+        val intent = Intent(this, AppLockActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            putExtra("EXTRA_CHANGE_PASSWORD", true)
+        }
+        val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
+
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("비밀번호 입력 ${count}회 실패")
+            .setContentText("보안을 위해 비밀번호를 변경하시겠습니까?")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setContentIntent(pendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        notificationManager.notify(1001, notification)
+    }
+
+    override fun onBackPressed() {
+        // 뒤로가기 시 홈 화면으로
+        val intent = Intent(Intent.ACTION_MAIN)
+        intent.addCategory(Intent.CATEGORY_HOME)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
+        startActivity(intent)
+    }
+}

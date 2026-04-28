@@ -25,4 +25,14 @@
     <style name="RoundedAlertDialogTheme" parent="Theme.AppCompat.Light.Dialog.Alert">
         <item name="android:windowBackground">@drawable/dialog_rounded_background</item>
     </style>
+
+    <style name="KeypadButton">
+        <item name="android:layout_width">0dp</item>
+        <item name="android:layout_height">70dp</item>
+        <item name="android:layout_columnWeight">1</item>
+        <item name="android:background">?attr/selectableItemBackground</item>
+        <item name="android:textColor">@android:color/white</item>
+        <item name="android:textSize">24sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
 </resources>

@@ -3,6 +3,9 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <application
         android:allowBackup="true"
@@ -32,6 +35,19 @@
         <activity android:name=".SettingsActivity" />
         <activity android:name=".BudgetSetupActivity" />
         <activity android:name=".ReportActivity" />
+        <activity android:name=".AppLockActivity" />
+        <activity android:name=".AppSelectActivity" />
+        <activity 
+            android:name=".LockActivity"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="" />
+
+        <service
+            android:name=".worker.AppMonitorService"
+            android:enabled="true"
+            android:exported="false"
+            android:foregroundServiceType="specialUse" />
 
         <activity 
             android:name=".FakeCartActivity"
