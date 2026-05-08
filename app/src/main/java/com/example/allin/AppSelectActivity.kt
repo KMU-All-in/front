@@ -1,9 +1,9 @@
 package com.example.allin
 
-import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
 import android.graphics.drawable.Drawable
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -14,6 +14,8 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import com.google.firebase.firestore.FirebaseFirestoreException
+import com.google.firebase.firestore.SetOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -35,7 +37,11 @@ class AppSelectActivity : AppCompatActivity() {
     private val db = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
     
-    private val shoppingKeywords = listOf("쿠팡", "무신사", "당근", "11번가", "G마켓", "옥션", "쇼핑", "store", "market", "shop", "coupang", "musinsa", "zigzag", "ably")
+    private val shoppingKeywords = listOf(
+        "쿠팡", "무신사", "당근", "11번가", "G마켓", "옥션", "쇼핑", "store", "market", "shop", 
+        "coupang", "musinsa", "zigzag", "ably", "브랜디", "에이블리", "지그재그", "티몬", "위메프", 
+        "네이버페이", "번개장터", "중고나라", "아이디어스", "컬리", "kurly"
+    )
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -56,59 +62,102 @@ class AppSelectActivity : AppCompatActivity() {
 
     private fun loadInstalledApps() {
         loadingProgress.visibility = View.VISIBLE
-        lifecycleScope.launch(Dispatchers.IO) {
-            val pm = packageManager
-            val packages = pm.getInstalledApplications(PackageManager.GET_META_DATA)
-            val appInfos = mutableListOf<AppInfo>()
+        val currentUser = auth.currentUser
+        
+        if (currentUser == null) {
+            loadingProgress.visibility = View.GONE
+            Toast.makeText(this, "로그인이 필요합니다.", Toast.LENGTH_SHORT).show()
+            return
+        }
 
-            for (app in packages) {
-                // 시스템 앱 제외하고 런처 아이콘이 있는 앱만 포함
-                if (pm.getLaunchIntentForPackage(app.packageName) != null) {
-                    val name = app.loadLabel(pm).toString()
-                    val isShopping = shoppingKeywords.any { name.lowercase().contains(it) || app.packageName.lowercase().contains(it) }
-                    
-                    appInfos.add(AppInfo(
-                        name = name,
-                        packageName = app.packageName,
-                        icon = app.loadIcon(pm),
-                        isShopping = isShopping
-                    ))
+        Log.d("AppSelectActivity", "Firestore 로드 시도 - UID: ${currentUser.uid}")
+        
+        db.collection("users").document(currentUser.uid).get()
+            .addOnCompleteListener { task ->
+                val currentLockedApps = if (task.isSuccessful) {
+                    val apps = task.result?.get("locked_apps") as? List<String> ?: emptyList()
+                    Log.d("AppSelectActivity", "기존 데이터 로드 성공: $apps")
+                    apps
+                } else {
+                    val e = task.exception as? FirebaseFirestoreException
+                    val errorCode = e?.code?.name ?: "UNKNOWN"
+                    Log.e("AppSelectActivity", "로드 실패: $errorCode", task.exception)
+                    Toast.makeText(this, "데이터 로드 실패: [$errorCode] ${task.exception?.localizedMessage}", Toast.LENGTH_LONG).show()
+                    emptyList()
+                }
+                
+                lifecycleScope.launch(Dispatchers.IO) {
+                    try {
+                        val pm = packageManager
+                        val packages = pm.getInstalledPackages(0)
+                        val appInfos = mutableListOf<AppInfo>()
+
+                        for (pkg in packages) {
+                            val app = pkg.applicationInfo ?: continue
+                            val pkgName = pkg.packageName ?: continue
+                            
+                            if (pm.getLaunchIntentForPackage(pkgName) != null && pkgName != packageName) {
+                                val name = app.loadLabel(pm).toString()
+                                val isShopping = shoppingKeywords.any { 
+                                    name.lowercase().contains(it) || pkgName.lowercase().contains(it) 
+                                }
+                                
+                                appInfos.add(AppInfo(
+                                    name = name,
+                                    packageName = pkgName,
+                                    icon = app.loadIcon(pm),
+                                    isShopping = isShopping,
+                                    isSelected = currentLockedApps.contains(pkgName)
+                                ))
+                            }
+                        }
+
+                        appInfos.sortWith(compareByDescending<AppInfo> { it.isShopping }.thenBy { it.name })
+
+                        withContext(Dispatchers.Main) {
+                            loadingProgress.visibility = View.GONE
+                            rvAppList.adapter = AppAdapter(appInfos)
+                        }
+                    } catch (e: Exception) {
+                        withContext(Dispatchers.Main) {
+                            loadingProgress.visibility = View.GONE
+                            Toast.makeText(this@AppSelectActivity, "목록 로딩 오류: ${e.message}", Toast.LENGTH_SHORT).show()
+                        }
+                    }
                 }
             }
-
-            // 쇼핑 앱 우선순위 및 이름순 정렬
-            appInfos.sortWith(compareByDescending<AppInfo> { it.isShopping }.thenBy { it.name })
-
-            withContext(Dispatchers.Main) {
-                loadingProgress.visibility = View.GONE
-                rvAppList.adapter = AppAdapter(appInfos)
-            }
-        }
     }
 
     private fun saveSelectedApps() {
         val currentUser = auth.currentUser ?: return
-        val selectedPackages = (rvAppList.adapter as AppAdapter).getSelectedPackages()
+        val adapter = rvAppList.adapter as? AppAdapter ?: return
+        val selectedPackages = adapter.getSelectedPackages()
         
         if (selectedPackages.isEmpty()) {
-            Toast.makeText(this, "잠글 앱을 선택해주세요.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "잠글 앱을 하나 이상 선택해주세요.", Toast.LENGTH_SHORT).show()
             return
         }
 
-        // Firestore에 잠금 앱 리스트 저장
+        loadingProgress.visibility = View.VISIBLE
+        btnDone.isEnabled = false
+
+        val data = mapOf("locked_apps" to selectedPackages)
+        Log.d("AppSelectActivity", "저장 시도 - 데이터: $data")
+
         db.collection("users").document(currentUser.uid)
-            .update("locked_apps", selectedPackages)
+            .set(data, SetOptions.merge())
             .addOnSuccessListener {
-                Toast.makeText(this, "잠금 앱 리스트가 업데이트되었습니다.", Toast.LENGTH_SHORT).show()
+                loadingProgress.visibility = View.GONE
+                Toast.makeText(this, "잠금 앱 리스트가 저장되었습니다.", Toast.LENGTH_SHORT).show()
                 finish()
             }
-            .addOnFailureListener {
-                // 문가 없는 경우 생성
-                db.collection("users").document(currentUser.uid)
-                    .set(mapOf("locked_apps" to selectedPackages), com.google.firebase.firestore.SetOptions.merge())
-                    .addOnSuccessListener {
-                        finish()
-                    }
+            .addOnFailureListener { e ->
+                loadingProgress.visibility = View.GONE
+                btnDone.isEnabled = true
+                val firestoreException = e as? FirebaseFirestoreException
+                val errorCode = firestoreException?.code?.name ?: "ERROR"
+                Log.e("AppSelectActivity", "저장 실패: $errorCode", e)
+                Toast.makeText(this, "저장 실패: [$errorCode] ${e.localizedMessage}", Toast.LENGTH_LONG).show()
             }
     }
 
@@ -130,10 +179,9 @@ class AppSelectActivity : AppCompatActivity() {
             
             holder.itemView.setOnClickListener {
                 app.isSelected = !app.isSelected
-                notifyItemChanged(position)
+                holder.cbSelect.isChecked = app.isSelected
             }
             
-            // 쇼핑 앱인 경우 강조 (선택 사항)
             if (app.isShopping) {
                 holder.tvName.setTextColor(resources.getColor(R.color.purple_500, null))
             } else {

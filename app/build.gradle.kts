@@ -10,7 +10,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.example.test" 
+        applicationId = "com.example.allin"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

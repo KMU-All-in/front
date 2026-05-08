@@ -15,13 +15,15 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.NotificationCompat
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 
 class LockActivity : AppCompatActivity() {
 
     private lateinit var tvLockAdvice: TextView
     private lateinit var pinIndicatorContainer: android.widget.LinearLayout
     private var currentPin = ""
-    private val correctPin = "1234" // 임시 비밀번호 (추후 DB 연동)
+    private var correctPin = "1234" // 기본값, Firestore에서 가져옵니다.
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -32,11 +34,23 @@ class LockActivity : AppCompatActivity() {
 
         setupKeypad()
         updatePinIndicators()
+        
+        // Firestore에서 실제 PIN 가져오기
+        fetchLockPin()
+    }
+
+    private fun fetchLockPin() {
+        val user = FirebaseAuth.getInstance().currentUser ?: return
+        FirebaseFirestore.getInstance().collection("users").document(user.uid)
+            .get()
+            .addOnSuccessListener { document ->
+                if (document != null && document.contains("lock_pin")) {
+                    correctPin = document.getString("lock_pin") ?: "1234"
+                }
+            }
     }
 
     private fun setupKeypad() {
-        // XML에서 버튼들에 android:tag를 수동으로 넣거나, 직접 ID 없이 텍스트로 찾기 힘드므로 
-        // 런타임에 모든 버튼을 순회하며 숫자 텍스트를 가진 버튼에 리스너 등록
         findAndSetNumericButtons(findViewById(android.R.id.content))
 
         findViewById<ImageButton>(R.id.btnBackspace).setOnClickListener {
@@ -116,7 +130,6 @@ class LockActivity : AppCompatActivity() {
             notificationManager.createNotificationChannel(channel)
         }
 
-        // 알림 클릭 시 비밀번호 변경(AppLockActivity)으로 이동
         val intent = Intent(this, AppLockActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
             putExtra("EXTRA_CHANGE_PASSWORD", true)
@@ -136,7 +149,6 @@ class LockActivity : AppCompatActivity() {
     }
 
     override fun onBackPressed() {
-        // 뒤로가기 시 홈 화면으로
         val intent = Intent(Intent.ACTION_MAIN)
         intent.addCategory(Intent.CATEGORY_HOME)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK

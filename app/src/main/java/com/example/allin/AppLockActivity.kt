@@ -1,19 +1,27 @@
 package com.example.allin
 
+import android.Manifest
+import android.app.ActivityManager
 import android.app.AppOpsManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
+import androidx.core.app.ActivityCompat
+import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
 import com.example.allin.worker.AppMonitorService
 import com.google.android.material.floatingactionbutton.FloatingActionButton
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.FirebaseFirestore
 
 class AppLockActivity : AppCompatActivity() {
 
@@ -22,22 +30,24 @@ class AppLockActivity : AppCompatActivity() {
     private lateinit var btnAddApp: FloatingActionButton
     private lateinit var btnMoreOptions: ImageButton
     private lateinit var btnChangePassword: LinearLayout
+    
+    private lateinit var adapter: LockedAppAdapter
+    private val db = FirebaseFirestore.getInstance()
+    private val auth = FirebaseAuth.getInstance()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_app_lock)
 
         initViews()
-        setupListeners()
         setupRecyclerView()
+        setupListeners()
         
-        // 권한 확인 및 요청
-        checkPermissions()
-
-        // E1: 비밀번호 오류 알림을 통해 들어온 경우 즉시 변경 다이얼로그 표시
-        if (intent.getBooleanExtra("EXTRA_CHANGE_PASSWORD", false)) {
-            showPasswordChangeDialog()
-        }
+        // 1. 권한 확인 (사용 정보 + 알림)
+        checkAndRequestPermissions()
+        
+        observeLockedApps()
+        swMainLock.isChecked = isServiceRunning(AppMonitorService::class.java)
     }
 
     private fun initViews() {
@@ -48,26 +58,30 @@ class AppLockActivity : AppCompatActivity() {
         btnChangePassword = findViewById(R.id.btnChangePassword)
     }
 
+    private fun setupRecyclerView() {
+        adapter = LockedAppAdapter(emptyList()) { packageName, isLocked ->
+            if (!isLocked) removeLockedApp(packageName)
+        }
+        rvLockedApps.layoutManager = LinearLayoutManager(this)
+        rvLockedApps.adapter = adapter
+    }
+
     private fun setupListeners() {
-        // A1. 쇼핑 앱 잠금 기능 on/off
         swMainLock.setOnCheckedChangeListener { _, isChecked ->
             if (isChecked) {
                 if (hasUsageStatsPermission()) {
                     startLockService()
-                    Toast.makeText(this, "잠금 서비스가 시작되었습니다.", Toast.LENGTH_SHORT).show()
                 } else {
                     swMainLock.isChecked = false
                     requestUsageStatsPermission()
                 }
             } else {
                 stopLockService()
-                Toast.makeText(this, "잠금 서비스가 종료되었습니다.", Toast.LENGTH_SHORT).show()
             }
         }
 
         btnAddApp.setOnClickListener {
-            val intent = Intent(this, AppSelectActivity::class.java)
-            startActivity(intent)
+            startActivity(Intent(this, AppSelectActivity::class.java))
         }
 
         btnMoreOptions.setOnClickListener { view ->
@@ -85,6 +99,14 @@ class AppLockActivity : AppCompatActivity() {
         }
     }
 
+    private fun isServiceRunning(serviceClass: Class<*>): Boolean {
+        val manager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        for (service in manager.getRunningServices(Int.MAX_VALUE)) {
+            if (serviceClass.name == service.service.className) return true
+        }
+        return false
+    }
+
     private fun startLockService() {
         val intent = Intent(this, AppMonitorService::class.java)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -98,14 +120,17 @@ class AppLockActivity : AppCompatActivity() {
         stopService(Intent(this, AppMonitorService::class.java))
     }
 
-    private fun checkPermissions() {
+    private fun checkAndRequestPermissions() {
+        // 1. 사용 정보 접근 권한 확인
         if (!hasUsageStatsPermission()) {
-            AlertDialog.Builder(this)
-                .setTitle("권한 필요")
-                .setMessage("앱 잠금 기능을 위해 '사용 정보 접근 권한'이 필요합니다. 설정 화면으로 이동하시겠습니까?")
-                .setPositiveButton("이동") { _, _ -> requestUsageStatsPermission() }
-                .setNegativeButton("취소", null)
-                .show()
+            requestUsageStatsPermission()
+        }
+        
+        // 2. 알림 권한 확인 (안드로이드 13 이상)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
+            }
         }
     }
 
@@ -120,44 +145,66 @@ class AppLockActivity : AppCompatActivity() {
     }
 
     private fun requestUsageStatsPermission() {
-        startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-    }
-
-    private fun setupRecyclerView() {
-        rvLockedApps.layoutManager = LinearLayoutManager(this)
-    }
-
-    private fun showDeleteAllConfirmDialog() {
         AlertDialog.Builder(this)
-            .setTitle("전체 삭제")
-            .setMessage("쇼핑 앱 잠금 리스트를 삭제하겠습니까?")
-            .setPositiveButton("삭제") { _, _ ->
-                Toast.makeText(this, "리스트가 삭제되었습니다.", Toast.LENGTH_SHORT).show()
+            .setTitle("권한 필요")
+            .setMessage("앱 잠금을 위해 '사용 정보 접근 권한'이 필요합니다. 설정으로 이동하시겠습니까?")
+            .setPositiveButton("이동") { _, _ ->
+                startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
             }
             .setNegativeButton("취소", null)
             .show()
     }
 
-    private fun showPasswordChangeDialog() {
-        // S4: 비밀번호 변경 시나리오 구현
-        val builder = AlertDialog.Builder(this)
-        builder.setTitle("비밀번호 변경")
-        
-        val layout = LinearLayout(this)
-        layout.orientation = LinearLayout.VERTICAL
-        layout.setPadding(50, 20, 50, 20)
+    private fun observeLockedApps() {
+        val currentUser = auth.currentUser ?: return
+        db.collection("users").document(currentUser.uid)
+            .addSnapshotListener { snapshot, e ->
+                if (e != null) return@addSnapshotListener
+                if (snapshot != null && snapshot.exists()) {
+                    val packageNames = snapshot.get("locked_apps") as? List<String> ?: emptyList()
+                    loadAppDetails(packageNames)
+                }
+            }
+    }
 
-        val etOldPass = EditText(this).apply { hint = "기존 비밀번호 입력" }
-        val etNewPass = EditText(this).apply { hint = "새 비밀번호 입력" }
-        layout.addView(etOldPass)
-        layout.addView(etNewPass)
-        
-        builder.setView(layout)
-        builder.setPositiveButton("변경") { _, _ ->
-            // 여기에 실제 저장 로직 추가 가능
-            Toast.makeText(this, "비밀번호가 변경되었습니다.", Toast.LENGTH_SHORT).show()
+    private fun loadAppDetails(packageNames: List<String>) {
+        val pm = packageManager
+        val lockedApps = packageNames.mapNotNull { pkg ->
+            try {
+                val appInfo = pm.getApplicationInfo(pkg, 0)
+                LockedApp(pkg, appInfo.loadLabel(pm).toString(), appInfo.loadIcon(pm))
+            } catch (e: Exception) { null }
         }
-        builder.setNegativeButton("취소", null)
-        builder.show()
+        adapter.updateData(lockedApps)
+    }
+
+    private fun removeLockedApp(packageName: String) {
+        val currentUser = auth.currentUser ?: return
+        db.collection("users").document(currentUser.uid).get().addOnSuccessListener { snapshot ->
+            val apps = snapshot.get("locked_apps") as? MutableList<String> ?: mutableListOf()
+            apps.remove(packageName)
+            db.collection("users").document(currentUser.uid).update("locked_apps", apps)
+        }
+    }
+
+    private fun showDeleteAllConfirmDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("전체 삭제")
+            .setMessage("잠금 리스트를 모두 삭제할까요?")
+            .setPositiveButton("삭제") { _, _ ->
+                val user = auth.currentUser ?: return@setPositiveButton
+                db.collection("users").document(user.uid).update("locked_apps", emptyList<String>())
+            }
+            .show()
+    }
+
+    private fun showPasswordChangeDialog() {
+        val user = auth.currentUser ?: return
+        val et = EditText(this).apply { inputType = android.text.InputType.TYPE_CLASS_NUMBER }
+        AlertDialog.Builder(this).setTitle("새 비밀번호").setView(et)
+            .setPositiveButton("변경") { _, _ ->
+                val pin = et.text.toString()
+                if (pin.length == 4) db.collection("users").document(user.uid).update("lock_pin", pin)
+            }.show()
     }
 }
