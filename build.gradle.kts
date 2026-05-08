@@ -5,4 +5,5 @@ plugins {
     alias(libs.plugins.google.services) apply false
 
     // 테스트 주석 하나만요
+    // 테스트 주석 하나 더요
 }
