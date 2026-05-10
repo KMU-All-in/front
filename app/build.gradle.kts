@@ -46,6 +46,7 @@ dependencies {
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth.ktx)
     implementation("com.google.firebase:firebase-firestore-ktx") // [추가] Firestore 라이브러리
+    implementation("com.google.firebase:firebase-functions")
 
     // 웹페이지 정보 추출 및 비동기
     implementation("org.jsoup:jsoup:1.16.1")
