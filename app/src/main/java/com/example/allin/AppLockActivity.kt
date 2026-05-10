@@ -1,6 +1,5 @@
 package com.example.allin
 
-import android.Manifest
 import android.app.ActivityManager
 import android.app.AppOpsManager
 import android.content.Context
@@ -14,14 +13,16 @@ import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.widget.SwitchCompat
-import androidx.core.app.ActivityCompat
-import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.example.allin.data.AppDatabase
+import com.example.allin.data.LockedAppRepository
 import com.example.allin.worker.AppMonitorService
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.launch
 
 class AppLockActivity : AppCompatActivity() {
 
@@ -32,6 +33,7 @@ class AppLockActivity : AppCompatActivity() {
     private lateinit var btnChangePassword: LinearLayout
     
     private lateinit var adapter: LockedAppAdapter
+    private lateinit var repository: LockedAppRepository
     private val db = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
 
@@ -39,14 +41,22 @@ class AppLockActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_app_lock)
 
+        // Repository 초기화
+        val dao = AppDatabase.getDatabase(applicationContext).lockedAppDao()
+        repository = LockedAppRepository(dao)
+
         initViews()
         setupRecyclerView()
         setupListeners()
         
-        // 1. 권한 확인 (사용 정보 + 알림)
-        checkAndRequestPermissions()
+        checkPermissions()
         
+        // Room 데이터 실시간 관찰
         observeLockedApps()
+
+        // 앱 시작 시 서버 데이터와 로컬 데이터 동기화
+        repository.syncFromFirestore(packageManager)
+
         swMainLock.isChecked = isServiceRunning(AppMonitorService::class.java)
     }
 
@@ -59,8 +69,13 @@ class AppLockActivity : AppCompatActivity() {
     }
 
     private fun setupRecyclerView() {
+        // 어댑터에 데이터와 토글(삭제) 콜백 전달
         adapter = LockedAppAdapter(emptyList()) { packageName, isLocked ->
-            if (!isLocked) removeLockedApp(packageName)
+            if (!isLocked) {
+                lifecycleScope.launch {
+                    repository.removeLockedApp(packageName)
+                }
+            }
         }
         rvLockedApps.layoutManager = LinearLayoutManager(this)
         rvLockedApps.adapter = adapter
@@ -99,6 +114,28 @@ class AppLockActivity : AppCompatActivity() {
         }
     }
 
+    private fun observeLockedApps() {
+        // Repository의 Flow를 관찰하여 UI 업데이트
+        lifecycleScope.launch {
+            repository.allLockedApps.collect { dbApps ->
+                val pm = packageManager
+                val uiModels = dbApps.mapNotNull { dbApp ->
+                    try {
+                        val appInfo = pm.getApplicationInfo(dbApp.packageName, 0)
+                        com.example.allin.LockedApp(
+                            packageName = dbApp.packageName,
+                            name = appInfo.loadLabel(pm).toString(),
+                            icon = appInfo.loadIcon(pm)
+                        )
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+                adapter.updateData(uiModels)
+            }
+        }
+    }
+
     private fun isServiceRunning(serviceClass: Class<*>): Boolean {
         val manager = getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
         for (service in manager.getRunningServices(Int.MAX_VALUE)) {
@@ -120,20 +157,6 @@ class AppLockActivity : AppCompatActivity() {
         stopService(Intent(this, AppMonitorService::class.java))
     }
 
-    private fun checkAndRequestPermissions() {
-        // 1. 사용 정보 접근 권한 확인
-        if (!hasUsageStatsPermission()) {
-            requestUsageStatsPermission()
-        }
-        
-        // 2. 알림 권한 확인 (안드로이드 13 이상)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-                ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
-            }
-        }
-    }
-
     private fun hasUsageStatsPermission(): Boolean {
         val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
         val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -145,66 +168,42 @@ class AppLockActivity : AppCompatActivity() {
     }
 
     private fun requestUsageStatsPermission() {
-        AlertDialog.Builder(this)
-            .setTitle("권한 필요")
-            .setMessage("앱 잠금을 위해 '사용 정보 접근 권한'이 필요합니다. 설정으로 이동하시겠습니까?")
-            .setPositiveButton("이동") { _, _ ->
-                startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
-            }
-            .setNegativeButton("취소", null)
-            .show()
+        startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
     }
 
-    private fun observeLockedApps() {
-        val currentUser = auth.currentUser ?: return
-        db.collection("users").document(currentUser.uid)
-            .addSnapshotListener { snapshot, e ->
-                if (e != null) return@addSnapshotListener
-                if (snapshot != null && snapshot.exists()) {
-                    val packageNames = snapshot.get("locked_apps") as? List<String> ?: emptyList()
-                    loadAppDetails(packageNames)
-                }
-            }
-    }
-
-    private fun loadAppDetails(packageNames: List<String>) {
-        val pm = packageManager
-        val lockedApps = packageNames.mapNotNull { pkg ->
-            try {
-                val appInfo = pm.getApplicationInfo(pkg, 0)
-                LockedApp(pkg, appInfo.loadLabel(pm).toString(), appInfo.loadIcon(pm))
-            } catch (e: Exception) { null }
-        }
-        adapter.updateData(lockedApps)
-    }
-
-    private fun removeLockedApp(packageName: String) {
-        val currentUser = auth.currentUser ?: return
-        db.collection("users").document(currentUser.uid).get().addOnSuccessListener { snapshot ->
-            val apps = snapshot.get("locked_apps") as? MutableList<String> ?: mutableListOf()
-            apps.remove(packageName)
-            db.collection("users").document(currentUser.uid).update("locked_apps", apps)
+    private fun checkPermissions() {
+        if (!hasUsageStatsPermission()) {
+            AlertDialog.Builder(this)
+                .setTitle("권한 필요")
+                .setMessage("앱 잠금을 위해 '사용 정보 접근 권한'이 필요합니다.")
+                .setPositiveButton("이동") { _, _ -> requestUsageStatsPermission() }
+                .show()
         }
     }
 
     private fun showDeleteAllConfirmDialog() {
         AlertDialog.Builder(this)
             .setTitle("전체 삭제")
-            .setMessage("잠금 리스트를 모두 삭제할까요?")
+            .setMessage("쇼핑 앱 잠금 리스트를 삭제하겠습니까?")
             .setPositiveButton("삭제") { _, _ ->
-                val user = auth.currentUser ?: return@setPositiveButton
-                db.collection("users").document(user.uid).update("locked_apps", emptyList<String>())
+                lifecycleScope.launch {
+                    // 전체 삭제 로직 (Repository에 추가 필요)
+                    repository.updateAllLockedApps(emptyList())
+                }
             }
+            .setNegativeButton("취소", null)
             .show()
     }
 
     private fun showPasswordChangeDialog() {
-        val user = auth.currentUser ?: return
+        val currentUser = auth.currentUser ?: return
         val et = EditText(this).apply { inputType = android.text.InputType.TYPE_CLASS_NUMBER }
         AlertDialog.Builder(this).setTitle("새 비밀번호").setView(et)
             .setPositiveButton("변경") { _, _ ->
                 val pin = et.text.toString()
-                if (pin.length == 4) db.collection("users").document(user.uid).update("lock_pin", pin)
+                if (pin.length == 4) {
+                    db.collection("users").document(currentUser.uid).update("lock_pin", pin)
+                }
             }.show()
     }
 }
