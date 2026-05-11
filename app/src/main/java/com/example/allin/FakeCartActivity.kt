@@ -11,6 +11,9 @@ import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import com.example.allin.data.FakeCartRepository
 import com.example.allin.data.FakeProduct
@@ -51,12 +54,13 @@ class FakeCartActivity : AppCompatActivity() {
     private lateinit var repository: FakeCartRepository
     private var currentTabIndex = 0
     
-    // 수정 모드를 위한 변수
     private var editingProduct: FakeProduct? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_fake_cart)
+
+        hideSystemBars()
 
         if (FirebaseAuth.getInstance().currentUser == null) {
             Toast.makeText(this, "로그인이 필요한 서비스입니다.", Toast.LENGTH_SHORT).show()
@@ -80,6 +84,17 @@ class FakeCartActivity : AppCompatActivity() {
             Toast.makeText(this, "화면 로드 중 오류가 발생했습니다.", Toast.LENGTH_LONG).show()
             finish()
         }
+    }
+
+    private fun hideSystemBars() {
+        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
+        windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideSystemBars()
     }
 
     private fun initViews(): Boolean {
@@ -127,28 +142,24 @@ class FakeCartActivity : AppCompatActivity() {
         btnSubmit.setOnClickListener { validateAndSaveProduct() }
         btnSubmitReason.setOnClickListener { saveNewReason() }
 
-        // E1: 스크린샷 추가 시 카테고리 분류 오류 시나리오 대응
         layoutPhotoInput.setOnClickListener {
             showErrorDialog("카테고리 분류 오류 가능성", "카테고리 분류 오류 가능성이 있습니다. 직접 재분류하시겠습니까?") {
-                selectTab(2) // 수동 입력 탭으로 이동
+                selectTab(2)
             }
         }
 
-        // 하단 네비게이션
+        // 하단 네비게이션 애니메이션 추가
         findViewById<LinearLayout>(R.id.navHome).setOnClickListener {
             val intent = Intent(this, HomeActivity::class.java)
             intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             startActivity(intent)
-            overridePendingTransition(0, 0)
+            overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
         }
         findViewById<LinearLayout>(R.id.navBudget).setOnClickListener {
             val intent = Intent(this, BudgetSetupActivity::class.java)
             intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             startActivity(intent)
-            overridePendingTransition(0, 0)
-        }
-        findViewById<LinearLayout>(R.id.navFakeCart).setOnClickListener {
-            // 현재 화면
+            overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
         }
     }
 
@@ -210,7 +221,6 @@ class FakeCartActivity : AppCompatActivity() {
 
                 itemView.findViewById<Button>(R.id.btnAddReason)?.setOnClickListener { showAddReasonPopup(product) }
                 
-                // [수정] 옵션 메뉴에 '기간 연장' 추가 (A5)
                 itemView.findViewById<ImageButton>(R.id.btnOptions)?.setOnClickListener { view ->
                     val popup = PopupMenu(this, view)
                     popup.menu.add("수정")
@@ -234,7 +244,6 @@ class FakeCartActivity : AppCompatActivity() {
         }
     }
 
-    // A5: 가짜 장바구니 시간 연장 다이얼로그
     private fun showExtendPeriodDialog(product: FakeProduct) {
         val options = arrayOf("1일 연장", "3일 연장", "7일 연장", "14일 연장")
         AlertDialog.Builder(this)
@@ -269,7 +278,6 @@ class FakeCartActivity : AppCompatActivity() {
         dimView.visibility = View.VISIBLE
         cardAddProduct.visibility = View.VISIBLE
         
-        // 기존 정보 채우기
         if (product.url.isNotEmpty()) {
             selectTab(0)
             etUrlInput.setText(product.url)
@@ -329,7 +337,6 @@ class FakeCartActivity : AppCompatActivity() {
                             doc.title().split(":")[0].trim()
                         }
                     } catch (e: Exception) {
-                        // E2, E3: URL 정보 로드 실패 또는 네트워크 오류 처리
                         withContext(Dispatchers.Main) {
                             btnSubmit.isEnabled = true
                             btnSubmit.text = if (editingProduct != null) "수정 완료" else "URL에서 상품 정보 가져오기"
@@ -337,7 +344,7 @@ class FakeCartActivity : AppCompatActivity() {
                                 "상품 정보를 불러올 수 없습니다.",
                                 "네트워크 오류 또는 지원하지 않는 URL입니다. 직접 입력하시겠습니까?"
                             ) {
-                                selectTab(2) // 직접 입력 탭으로 이동
+                                selectTab(2)
                             }
                         }
                         return@launch
@@ -383,7 +390,6 @@ class FakeCartActivity : AppCompatActivity() {
         }
     }
 
-    // 공통 오류 알림 다이얼로그 (E1, E2, E3 대응)
     private fun showErrorDialog(title: String, message: String, onPositive: () -> Unit) {
         AlertDialog.Builder(this)
             .setTitle(title)

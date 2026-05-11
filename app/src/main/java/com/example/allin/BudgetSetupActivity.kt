@@ -12,10 +12,13 @@ import androidx.cardview.widget.CardView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.example.allin.data.Payment
 import com.google.firebase.Timestamp
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import java.text.DecimalFormat
 import java.util.*
 
@@ -26,6 +29,7 @@ class BudgetSetupActivity : AppCompatActivity() {
     private lateinit var tvPopupTitle: TextView
     private lateinit var tvLabel1: TextView
     private lateinit var tvLabel2: TextView
+    private lateinit var tvLabel3: TextView
     private lateinit var etInputAmount: EditText
     private lateinit var etInputName: EditText
     private lateinit var spCategory: Spinner
@@ -58,12 +62,18 @@ class BudgetSetupActivity : AppCompatActivity() {
         windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
     }
 
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideSystemBars()
+    }
+
     private fun initViews() {
         cardAddPlan = findViewById(R.id.cardAddPlan)
         dimView = findViewById(R.id.dimView)
         tvPopupTitle = findViewById(R.id.tvPopupTitle)
         tvLabel1 = findViewById(R.id.tvLabel1)
         tvLabel2 = findViewById(R.id.tvLabel2)
+        tvLabel3 = findViewById(R.id.tvLabel3)
         etInputAmount = findViewById(R.id.etInputAmount)
         etInputName = findViewById(R.id.etInputName)
         spCategory = findViewById(R.id.spCategory)
@@ -101,6 +111,8 @@ class BudgetSetupActivity : AppCompatActivity() {
         etInputAmount.hint = "예: 200000"
         tvLabel2.visibility = View.GONE
         etInputName.visibility = View.GONE
+        tvLabel3.visibility = View.GONE
+        spCategory.visibility = View.GONE
         dimView.visibility = View.VISIBLE
         cardAddPlan.visibility = View.VISIBLE
     }
@@ -111,8 +123,8 @@ class BudgetSetupActivity : AppCompatActivity() {
         etInputAmount.hint = "금액을 입력하세요"
         tvLabel2.visibility = View.VISIBLE
         etInputName.visibility = View.VISIBLE
-        tvLabel2.text = "항목 명"
-        etInputName.hint = "예: 점심 식사"
+        tvLabel3.visibility = View.VISIBLE
+        spCategory.visibility = View.VISIBLE
         
         val adapter = spCategory.adapter as ArrayAdapter<String>
         val pos = adapter.getPosition(category)
@@ -136,7 +148,6 @@ class BudgetSetupActivity : AppCompatActivity() {
         val amount = amountStr.toLong()
 
         if (tvPopupTitle.text == "이번 주 계획 추가") {
-            // 예산 설정 (가장 최근 리포트 문서 업데이트 또는 생성)
             db.collection("users").document(currentUser.uid)
                 .collection("reports")
                 .orderBy("start_date", Query.Direction.DESCENDING)
@@ -146,10 +157,9 @@ class BudgetSetupActivity : AppCompatActivity() {
                     if (!snapshots.isEmpty) {
                         snapshots.documents[0].reference.update("budget_usage", amount)
                     } else {
-                        // 리포트가 없는 경우 새로 생성 (기본 예시 날짜)
                         val newReport = hashMapOf(
                             "budget_usage" to amount,
-                            "total_spent" to 0,
+                            "total_spent" to 0L,
                             "start_date" to Timestamp.now(),
                             "end_date" to Timestamp(Date(System.currentTimeMillis() + 7 * 24 * 60 * 60 * 1000)),
                             "report_type" to "weekly"
@@ -158,7 +168,6 @@ class BudgetSetupActivity : AppCompatActivity() {
                     }
                 }
         } else {
-            // 지출 추가 (transactions 컬렉션에 추가)
             val storeName = etInputName.text.toString().ifEmpty { "지출" }
             val category = spCategory.selectedItem.toString()
             
@@ -173,7 +182,6 @@ class BudgetSetupActivity : AppCompatActivity() {
             db.collection("users").document(currentUser.uid).collection("transactions")
                 .add(transaction)
                 .addOnSuccessListener {
-                    // 지출 추가 후 해당 리포트의 total_spent도 업데이트하는 로직이 필요할 수 있습니다.
                     updateTotalSpent(currentUser.uid)
                 }
         }
@@ -208,7 +216,6 @@ class BudgetSetupActivity : AppCompatActivity() {
     private fun observeData() {
         val currentUser = auth.currentUser ?: return
         
-        // 리포트 데이터 감시 (예산 및 총 소비액)
         db.collection("users").document(currentUser.uid)
             .collection("reports")
             .orderBy("start_date", Query.Direction.DESCENDING)
@@ -224,7 +231,6 @@ class BudgetSetupActivity : AppCompatActivity() {
                 }
             }
 
-        // 지출 내역 감시 (카테고리별 리스트)
         db.collection("users").document(currentUser.uid)
             .collection("transactions")
             .addSnapshotListener { snapshots, _ ->
@@ -287,18 +293,13 @@ class BudgetSetupActivity : AppCompatActivity() {
             val intent = Intent(this, HomeActivity::class.java)
             intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             startActivity(intent)
-            overridePendingTransition(0, 0)
+            overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
         }
         findViewById<LinearLayout>(R.id.navFakeCart).setOnClickListener {
             val intent = Intent(this, FakeCartActivity::class.java)
             intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             startActivity(intent)
-            overridePendingTransition(0, 0)
+            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
         }
-    }
-
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) hideSystemBars()
     }
 }
