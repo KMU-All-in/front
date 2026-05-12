@@ -1,344 +1,90 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#E9EFFF"
-    android:orientation="vertical">
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="@android:color/white">
 
-    <!-- Top Bar -->
-    <LinearLayout
+    <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:background="@android:color/white"
-        android:padding="20dp"
-        android:orientation="horizontal"
-        android:gravity="center_vertical">
+        android:layout_marginBottom="24dp">
         <ImageView
             android:id="@+id/btnBack"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:src="@drawable/abc_ic_ab_back_material"
-            app:tint="@android:color/black" />
-        <LinearLayout
-            android:layout_width="0dp"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:src="@drawable/ic_back" />
+        <TextView
+            android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:layout_marginStart="16dp"
-            android:orientation="vertical">
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="For-pose"
-                android:textColor="@android:color/black"
-                android:textSize="18sp"
-                android:textStyle="bold" />
-        </LinearLayout>
-    </LinearLayout>
+            android:layout_centerInParent="true"
+            android:text="설정"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+    </RelativeLayout>
 
-    <ScrollView
+    <TextView
+        android:id="@+id/tvUserName"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="사용자 이름"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+    <TextView
+        android:id="@+id/tvUserEmail"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="user@email.com"
+        android:textColor="@android:color/darker_gray" />
+
+    <View
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1">
+        android:layout_height="1dp"
+        android:background="#EEEEEE"
+        android:layout_marginVertical="20dp" />
 
-        <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="24dp">
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="알림 설정"
+        android:textStyle="bold"
+        android:layout_marginBottom="12dp" />
 
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="설정"
-                android:textColor="@android:color/black"
-                android:textSize="22sp"
-                android:textStyle="bold" />
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="앱 설정을 관리하세요"
-                android:textColor="#9E9E9E"
-                android:textSize="14sp" />
+    <!-- A1: 알림 개별 설정 스위치들 -->
+    <androidx.appcompat.widget.SwitchCompat
+        android:id="@+id/swBudgetAlert"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="예산 경고 알림"
+        android:paddingVertical="12dp" />
 
-            <!-- 사용자 정보 -->
-            <androidx.cardview.widget.CardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="24dp"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp">
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="20dp"
-                    android:orientation="vertical">
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical">
-                        <ImageView
-                            android:layout_width="20dp"
-                            android:layout_height="20dp"
-                            android:src="@android:drawable/ic_menu_myplaces"
-                            app:tint="@android:color/black" />
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
-                            android:text="사용자 정보"
-                            android:textColor="@android:color/black"
-                            android:textStyle="bold" />
-                    </LinearLayout>
-                    <RelativeLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp">
-                        <LinearLayout
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:orientation="vertical">
-                            <TextView
-                                android:id="@+id/tvUserName"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="사용자"
-                                android:textColor="@android:color/black"
-                                android:textStyle="bold" />
-                            <TextView
-                                android:id="@+id/tvUserEmail"
-                                android:layout_width="wrap_content"
-                                android:layout_height="wrap_content"
-                                android:text="user@example.com"
-                                android:textColor="#9E9E9E"
-                                android:textSize="12sp" />
-                        </LinearLayout>
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_alignParentEnd="true"
-                            android:layout_centerVertical="true"
-                            android:text="수정 >"
-                            android:textColor="#9E9E9E"
-                            android:textSize="12sp" />
-                    </RelativeLayout>
-                </LinearLayout>
-            </androidx.cardview.widget.CardView>
+    <androidx.appcompat.widget.SwitchCompat
+        android:id="@+id/swPlanAlert"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="주간 계획 작성 알림"
+        android:paddingVertical="12dp" />
 
-            <!-- 알림 설정 -->
-            <androidx.cardview.widget.CardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp">
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="20dp"
-                    android:orientation="vertical">
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical">
-                        <ImageView
-                            android:layout_width="20dp"
-                            android:layout_height="20dp"
-                            android:src="@android:drawable/ic_popup_reminder"
-                            app:tint="@android:color/black" />
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
-                            android:text="알림 설정"
-                            android:textColor="@android:color/black"
-                            android:textStyle="bold" />
-                    </LinearLayout>
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="받고 싶은 알림을 선택하세요"
-                        android:textColor="#9E9E9E"
-                        android:textSize="12sp" />
+    <androidx.appcompat.widget.SwitchCompat
+        android:id="@+id/swCartAlert"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="장바구니 소멸 알림"
+        android:paddingVertical="12dp" />
 
-                    <!-- 스위치들 -->
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:gravity="center_vertical">
-                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="예산 알림" android:textColor="@android:color/black" android:textSize="14sp" android:textStyle="bold" />
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="예산 50%, 80%, 90%, 100% 도달 시 알림" android:textColor="#9E9E9E" android:textSize="11sp" />
-                        </LinearLayout>
-                        <Switch android:layout_width="wrap_content" android:layout_height="wrap_content" android:checked="true" />
-                    </LinearLayout>
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#EEEEEE"
+        android:layout_marginVertical="20dp" />
 
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:gravity="center_vertical">
-                        <LinearLayout android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:orientation="vertical">
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="주간 계획 작성 알림" android:textColor="@android:color/black" android:textSize="14sp" android:textStyle="bold" />
-                            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="주간 계획 미작성 시 12시, 18시에 알림" android:textColor="#9E9E9E" android:textSize="11sp" />
-                        </LinearLayout>
-                        <Switch android:layout_width="wrap_content" android:layout_height="wrap_content" android:checked="true" />
-                    </LinearLayout>
-                </LinearLayout>
-            </androidx.cardview.widget.CardView>
+    <Button
+        android:id="@+id/btnLogout"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="로그아웃"
+        android:backgroundTint="#FF5252"
+        android:textColor="@android:color/white" />
 
-            <!-- 실시간 피드백 -->
-            <androidx.cardview.widget.CardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp">
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="20dp"
-                    android:orientation="vertical">
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical">
-                        <ImageView
-                            android:layout_width="20dp"
-                            android:layout_height="20dp"
-                            android:src="@android:drawable/ic_menu_recent_history"
-                            app:tint="@android:color/black" />
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
-                            android:text="실시간 피드백 알림"
-                            android:textColor="@android:color/black"
-                            android:textStyle="bold" />
-                    </LinearLayout>
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:text="쇼핑 앱 사용 중 받을 피드백을 설정하세요"
-                        android:textColor="#9E9E9E"
-                        android:textSize="12sp" />
-                    
-                    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:gravity="center_vertical">
-                        <TextView android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="실시간 피드백 활성화" android:textColor="@android:color/black" android:textSize="14sp" android:textStyle="bold" />
-                        <Switch android:layout_width="wrap_content" android:layout_height="wrap_content" android:checked="true" />
-                    </LinearLayout>
-
-                    <Button
-                        android:layout_width="match_parent"
-                        android:layout_height="45dp"
-                        android:layout_marginTop="16dp"
-                        android:backgroundTint="@android:color/white"
-                        android:text="맞춤형 피드백 메시지 설정"
-                        android:textColor="@android:color/black"
-                        android:textSize="12sp"
-                        app:strokeColor="#E0E0E0"
-                        app:strokeWidth="1dp"
-                        app:cornerRadius="8dp" />
-                </LinearLayout>
-            </androidx.cardview.widget.CardView>
-
-            <!-- 보안 -->
-            <androidx.cardview.widget.CardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp">
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="20dp"
-                    android:orientation="vertical">
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:gravity="center_vertical">
-                        <ImageView
-                            android:layout_width="20dp"
-                            android:layout_height="20dp"
-                            android:src="@android:drawable/ic_lock_idle_lock"
-                            app:tint="@android:color/black" />
-                        <TextView
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="8dp"
-                            android:text="보안"
-                            android:textColor="@android:color/black"
-                            android:textStyle="bold" />
-                    </LinearLayout>
-                    <Button
-                        android:layout_width="match_parent"
-                        android:layout_height="45dp"
-                        android:layout_marginTop="16dp"
-                        android:backgroundTint="@android:color/white"
-                        android:text="앱 잠금 비밀번호 변경"
-                        android:textColor="@android:color/black"
-                        android:textSize="12sp"
-                        android:gravity="start|center_vertical"
-                        android:paddingStart="16dp"
-                        app:strokeColor="#E0E0E0"
-                        app:strokeWidth="1dp"
-                        app:cornerRadius="8dp" />
-                </LinearLayout>
-            </androidx.cardview.widget.CardView>
-
-            <!-- 계정 -->
-            <androidx.cardview.widget.CardView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:layout_marginBottom="24dp"
-                app:cardCornerRadius="16dp"
-                app:cardElevation="0dp">
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:padding="20dp"
-                    android:orientation="vertical">
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="계정"
-                        android:textColor="@android:color/black"
-                        android:textStyle="bold" />
-                    
-                    <Button
-                        android:id="@+id/btnLogout"
-                        android:layout_width="match_parent"
-                        android:layout_height="45dp"
-                        android:layout_marginTop="16dp"
-                        android:backgroundTint="@android:color/white"
-                        android:text="로그아웃"
-                        android:textColor="@android:color/black"
-                        android:textSize="12sp"
-                        android:gravity="start|center_vertical"
-                        android:paddingStart="16dp"
-                        app:strokeColor="#E0E0E0"
-                        app:strokeWidth="1dp"
-                        app:cornerRadius="8dp" />
-                    
-                    <TextView
-                        android:id="@+id/btnDeleteAccount"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp"
-                        android:layout_marginStart="4dp"
-                        android:text="계정 삭제"
-                        android:textColor="#F44336"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
-                </LinearLayout>
-            </androidx.cardview.widget.CardView>
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center_horizontal"
-                android:text="For-pose v1.0.0\n충동구매 방지 앱"
-                android:textAlignment="center"
-                android:textColor="#9E9E9E"
-                android:textSize="11sp" />
-
-        </LinearLayout>
-    </ScrollView>
 </LinearLayout>
