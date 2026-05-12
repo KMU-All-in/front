@@ -35,6 +35,9 @@ class PaymentNotificationListenerService : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         super.onNotificationPosted(sbn)
 
+        // 1. 우리 앱(AllIn)에서 발생한 알림은 무시 (무한 루프 방지)
+        if (sbn?.packageName == packageName) return
+
         val extras = sbn?.notification?.extras ?: return
         val title = extras.getString(Notification.EXTRA_TITLE) ?: ""
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
@@ -42,7 +45,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
 
         Log.d("PaymentListener", "알림 감지: $fullText")
 
-        // 키워드 체크: 결제, 승인, 사용, 또는 "원" 포함 시
+        // 2. 결제 관련 키워드가 있을 때만 처리
         if (fullText.contains("결제") || fullText.contains("승인") || fullText.contains("원") || fullText.contains("사용")) {
             parseAndSavePayment(fullText)
         }
@@ -51,7 +54,6 @@ class PaymentNotificationListenerService : NotificationListenerService() {
     private fun parseAndSavePayment(content: String) {
         scope.launch {
             try {
-                // 금액 추출 정규식 보강: 숫자와 쉼표 뒤에 '원'이 오는 경우 추출
                 val amountPattern = Pattern.compile("([\\d,]+)\\s*원")
                 val amountMatcher = amountPattern.matcher(content)
                 var amount = 0
@@ -60,7 +62,6 @@ class PaymentNotificationListenerService : NotificationListenerService() {
                     amount = amountStr.toIntOrNull() ?: 0
                 }
 
-                // 상점명 추출 (알림 내용에서 첫 번째 단어 혹은 두 번째 단어)
                 val parts = content.split(" ")
                 val storeName = if (parts.size > 1) parts[0] + " " + parts[1] else parts.getOrNull(0) ?: "알 수 없는 상점"
 
@@ -73,17 +74,13 @@ class PaymentNotificationListenerService : NotificationListenerService() {
                         storeName = storeName
                     )
                     
-                    // 로컬 DB 및 Firestore 동기화 실행
                     repository.insert(payment)
-                    Log.d("PaymentListener", "DB 저장 완료: $storeName, $amount 원")
+                    Log.d("PaymentListener", "지출 기록 완료: $storeName $amount 원")
                     
-                    // 성공 알림 발송
                     sendCompletionNotification(storeName, amount)
-                } else {
-                    Log.d("PaymentListener", "금액 추출 실패: $content")
                 }
             } catch (e: Exception) {
-                Log.e("PaymentListener", "분석/저장 오류", e)
+                Log.e("PaymentListener", "분석 오류", e)
             }
         }
     }
@@ -113,7 +110,6 @@ class PaymentNotificationListenerService : NotificationListenerService() {
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
-            .setOngoing(false)
             .build()
 
         notificationManager.notify(2001, notification)

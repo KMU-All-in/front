@@ -17,15 +17,10 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
-import androidx.lifecycle.lifecycleScope
-import com.example.allin.data.AppDatabase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
-import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 import java.text.DecimalFormat
-import java.util.*
 
 class HomeActivity : AppCompatActivity() {
 
@@ -47,7 +42,7 @@ class HomeActivity : AppCompatActivity() {
         hideSystemBars()
         initViews()
         setupListeners()
-        observeBudgetData()
+        observeBudgetData() // 서버 리포트 데이터를 직접 관찰
         checkNotificationPermission()
     }
 
@@ -67,47 +62,39 @@ class HomeActivity : AppCompatActivity() {
     private fun observeBudgetData() {
         val currentUser = auth.currentUser ?: return
         
-        // 1. 서버에서 예산 설정액만 가져옴
+        // Firestore의 리포트 데이터를 실시간 감시 (BudgetSetupActivity와 동기화)
         db.collection("users").document(currentUser.uid)
             .collection("reports")
             .orderBy("start_date", Query.Direction.DESCENDING)
             .limit(1)
             .addSnapshotListener { snapshots, e ->
-                if (e != null || snapshots == null || snapshots.isEmpty) return@addSnapshotListener
+                if (e != null || snapshots == null || snapshots.isEmpty) {
+                    updateUI(0, 0)
+                    return@addSnapshotListener
+                }
+
                 val document = snapshots.documents[0]
                 val budgetLimit = document.getLong("budget_usage")?.toInt() ?: 0
+                val totalSpent = document.getLong("total_spent")?.toInt() ?: 0
                 
-                // 2. 실제 지출액은 내 폰(Room DB)에서 실시간으로 직접 합산해서 보여줌
-                syncSpentWithLocalDB(budgetLimit)
+                updateUI(budgetLimit, totalSpent)
             }
     }
 
-    private fun syncSpentWithLocalDB(budgetLimit: Int) {
-        val dao = AppDatabase.getDatabase(this).paymentDao()
+    private fun updateUI(budgetLimit: Int, totalSpent: Int) {
         val dec = DecimalFormat("#,###")
+        tvWeeklyBudget.text = "${dec.format(budgetLimit)}원"
+        tvUsedAmount.text = "${dec.format(totalSpent)}원"
         
-        lifecycleScope.launch {
-            // 로컬 DB가 변할 때마다(adb 입력 등) 자동으로 실행됨
-            dao.getAllPayments().collectLatest { payments ->
-                val calendar = Calendar.getInstance()
-                calendar.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
-                calendar.set(Calendar.HOUR_OF_DAY, 0)
-                val startOfWeek = calendar.timeInMillis
-                
-                // 이번 주 지출만 합산
-                val thisWeekTotal = payments.filter { it.date >= startOfWeek }.sumOf { it.amount }
-                
-                // UI 업데이트
-                tvWeeklyBudget.text = "${dec.format(budgetLimit)}원"
-                tvUsedAmount.text = "${dec.format(thisWeekTotal)}원"
-                
-                if (budgetLimit > 0) {
-                    val percent = (thisWeekTotal.toFloat() / budgetLimit.toFloat() * 100).toInt()
-                    budgetProgress.progress = percent
-                    tvProgressPercent.text = "$percent.0%"
-                    updateStatusByPercent(percent)
-                }
-            }
+        if (budgetLimit > 0) {
+            val percent = (totalSpent.toFloat() / budgetLimit.toFloat() * 100).toInt()
+            budgetProgress.progress = percent
+            tvProgressPercent.text = "$percent.0%"
+            updateStatusByPercent(percent)
+        } else {
+            budgetProgress.progress = 0
+            tvProgressPercent.text = "0.0%"
+            tvWarningMsg.text = "예산을 먼저 설정해 주세요!"
         }
     }
 

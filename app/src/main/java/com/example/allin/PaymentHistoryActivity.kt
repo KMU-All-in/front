@@ -2,12 +2,10 @@ package com.example.allin
 
 import android.os.Bundle
 import android.view.LayoutInflater
-import android.widget.ArrayAdapter
-import android.widget.EditText
-import android.widget.Spinner
-import android.widget.Toast
+import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.Toolbar
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -31,9 +29,27 @@ class PaymentHistoryActivity : AppCompatActivity() {
         val dao = AppDatabase.getDatabase(this).paymentDao()
         repository = PaymentRepository(dao)
 
+        setupToolbar()
         setupRecyclerView()
         setupSortSpinner()
         observePayments()
+    }
+
+    private fun setupToolbar() {
+        val toolbar = findViewById<Toolbar>(R.id.toolbar) ?: return
+        setSupportActionBar(toolbar)
+        
+        // 뒤로가기 버튼 활성화
+        supportActionBar?.setDisplayHomeAsUpEnabled(true)
+        toolbar.setNavigationOnClickListener {
+            finish()
+        }
+
+        // 전체 삭제 기능 (툴바 제목 길게 누르기) - 테스트용 데이터 초기화
+        toolbar.setOnLongClickListener {
+            showClearAllConfirmDialog()
+            true
+        }
     }
 
     private fun setupRecyclerView() {
@@ -48,7 +64,6 @@ class PaymentHistoryActivity : AppCompatActivity() {
 
     private fun setupSortSpinner() {
         spinnerSort = findViewById(R.id.spinnerSort)
-        // strings.xml의 sort_options 사용
         val adapterSort = ArrayAdapter.createFromResource(
             this,
             R.array.sort_options,
@@ -57,9 +72,12 @@ class PaymentHistoryActivity : AppCompatActivity() {
         adapterSort.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         spinnerSort.adapter = adapterSort
         
-        // 정렬 변경 시 리스트 갱신을 위해 관찰
-        // 간단한 구현을 위해 여기서는 리스너 없이 observePayments에서 처리하거나 
-        // 선택 시점에 다시 fetch 할 수 있습니다. 
+        spinnerSort.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p0: AdapterView<*>?, p1: android.view.View?, p2: Int, p3: Long) {
+                observePayments() 
+            }
+            override fun onNothingSelected(p0: AdapterView<*>?) {}
+        }
     }
 
     private fun observePayments() {
@@ -107,6 +125,20 @@ class PaymentHistoryActivity : AppCompatActivity() {
                 lifecycleScope.launch {
                     repository.delete(payment)
                     Toast.makeText(this@PaymentHistoryActivity, "삭제되었습니다.", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("취소", null)
+            .show()
+    }
+
+    private fun showClearAllConfirmDialog() {
+        AlertDialog.Builder(this)
+            .setTitle("전체 내역 초기화")
+            .setMessage("테스트를 위해 모든 내역을 삭제하고 0원으로 만드시겠습니까?")
+            .setPositiveButton("모두 삭제") { _, _ ->
+                lifecycleScope.launch {
+                    repository.deleteAll()
+                    Toast.makeText(this@PaymentHistoryActivity, "모든 내역이 초기화되었습니다.", Toast.LENGTH_SHORT).show()
                 }
             }
             .setNegativeButton("취소", null)
