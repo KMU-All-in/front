@@ -247,3 +247,148 @@ exports.parsePaymentData = onCall((request) => {
     );
   }
 });
+
+// -----------------------------
+// BudgetAnalyzer
+// -----------------------------
+
+function roundToTwo(num) {
+  return Math.round(num * 100) / 100;
+}
+
+function filterByMonth(spendingData, targetMonth) {
+  if (!targetMonth) return spendingData;
+
+  return spendingData.filter((item) => {
+    if (!item.date) return false;
+    return String(item.date).startsWith(targetMonth);
+  });
+}
+
+function calculateTotalSpent(spendingData) {
+  return spendingData.reduce((sum, item) => {
+    const amount = Number(item.amount) || 0;
+    return sum + amount;
+  }, 0);
+}
+
+function calculateCategorySpent(spendingData) {
+  const categoryMap = {};
+
+  spendingData.forEach((item) => {
+    const category = item.category || "기타";
+    const amount = Number(item.amount) || 0;
+
+    if (!categoryMap[category]) {
+      categoryMap[category] = 0;
+    }
+
+    categoryMap[category] += amount;
+  });
+
+  return categoryMap;
+}
+
+function createCategoryAnalysis(categorySpent, totalSpent, categoryBudgets) {
+  return Object.entries(categorySpent).map(([category, spent]) => {
+    const budget = categoryBudgets?.[category] || 0;
+
+    const ratio = totalSpent > 0
+      ? roundToTwo((spent / totalSpent) * 100)
+      : 0;
+
+    const usageRate = budget > 0
+      ? roundToTwo((spent / budget) * 100)
+      : null;
+
+    return {
+      category: category,
+      spent: spent,
+      ratio: ratio,
+      budget: budget,
+      usageRate: usageRate,
+      isOverBudget: budget > 0 ? spent > budget : false
+    };
+  });
+}
+
+function analyzeSpendingPattern(categoryAnalysis) {
+  if (!categoryAnalysis || categoryAnalysis.length === 0) {
+    return "분석할 소비 데이터가 없습니다.";
+  }
+
+  const sorted = [...categoryAnalysis].sort((a, b) => b.spent - a.spent);
+  const topCategory = sorted[0];
+
+  if (topCategory.ratio >= 50) {
+    return `이번 달 소비는 ${topCategory.category} 카테고리에 집중되어 있습니다.`;
+  }
+
+  return `이번 달 소비는 ${topCategory.category} 카테고리의 비중이 가장 높습니다.`;
+}
+
+function analyzeBudgetData(spendingData, monthlyBudget, categoryBudgets, targetMonth) {
+  if (!Array.isArray(spendingData)) {
+    throw new Error("spendingData는 배열 형태여야 합니다.");
+  }
+
+  const filteredData = filterByMonth(spendingData, targetMonth);
+  const totalSpent = calculateTotalSpent(filteredData);
+  const categorySpent = calculateCategorySpent(filteredData);
+  const categoryAnalysis = createCategoryAnalysis(
+    categorySpent,
+    totalSpent,
+    categoryBudgets || {}
+  );
+
+  const budgetUsageRate = monthlyBudget > 0
+    ? roundToTwo((totalSpent / monthlyBudget) * 100)
+    : null;
+
+  const remainingBudget = monthlyBudget > 0
+    ? monthlyBudget - totalSpent
+    : null;
+
+  return {
+    targetMonth: targetMonth || "all",
+    totalSpent: totalSpent,
+    monthlyBudget: monthlyBudget || 0,
+    budgetUsageRate: budgetUsageRate,
+    isOverBudget: monthlyBudget > 0 ? totalSpent > monthlyBudget : false,
+    remainingBudget: remainingBudget,
+    categoryAnalysis: categoryAnalysis,
+    patternSummary: analyzeSpendingPattern(categoryAnalysis)
+  };
+}
+
+exports.analyzeBudget = onCall((request) => {
+  const data = request.data;
+
+  if (!data || !data.spendingData) {
+    throw new HttpsError(
+      "invalid-argument",
+      "spendingData가 필요합니다."
+    );
+  }
+
+  try {
+    const result = analyzeBudgetData(
+      data.spendingData,
+      Number(data.monthlyBudget) || 0,
+      data.categoryBudgets || {},
+      data.targetMonth
+    );
+
+    return {
+      success: true,
+      message: "예산 분석 완료",
+      result: result
+    };
+  } catch (error) {
+    throw new HttpsError(
+      "internal",
+      "예산 분석 중 오류가 발생했습니다.",
+      error.message
+    );
+  }
+});
