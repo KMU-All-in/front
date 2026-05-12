@@ -1,20 +1,16 @@
 <resources xmlns:tools="http://schemas.android.com/tools">
     <!-- Base application theme. -->
     <style name="Theme.AllIn" parent="Theme.MaterialComponents.DayNight.NoActionBar">
-        <!-- 타이틀 바 제거 강제 설정 -->
         <item name="android:windowNoTitle">true</item>
         <item name="windowActionBar">false</item>
         
-        <!-- Primary brand color. -->
-        <item name="colorPrimary">@color/purple_500</item>
-        <item name="colorPrimaryVariant">@color/purple_700</item>
+        <item name="colorPrimary">#6200EE</item>
+        <item name="colorPrimaryVariant">#3700B3</item>
         <item name="colorOnPrimary">@color/white</item>
-        <!-- Secondary brand color. -->
         <item name="colorSecondary">@color/teal_200</item>
         <item name="colorSecondaryVariant">@color/teal_700</item>
         <item name="colorOnSecondary">@color/black</item>
         
-        <!-- Status bar color. (상태바 색상을 배경색과 맞춤) -->
         <item name="android:statusBarColor">#E9EFFF</item>
         <item name="android:windowLightStatusBar">true</item>
         
@@ -24,6 +20,9 @@
 
     <style name="RoundedAlertDialogTheme" parent="Theme.AppCompat.Light.Dialog.Alert">
         <item name="android:windowBackground">@drawable/dialog_rounded_background</item>
+        <!-- 팝업 버튼 글자색을 확실히 잘 보이는 보라색으로 설정 -->
+        <item name="colorAccent">#6200EE</item>
+        <item name="android:textColorPrimary">@android:color/black</item>
     </style>
 
     <style name="KeypadButton">
