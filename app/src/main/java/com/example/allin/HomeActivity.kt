@@ -28,6 +28,8 @@ class HomeActivity : AppCompatActivity() {
     private lateinit var tvProgressPercent: TextView
     private lateinit var budgetProgress: ProgressBar
     private lateinit var tvBudgetDateRange: TextView
+    private lateinit var ivCharacter: ImageView
+    private lateinit var tvWarningMsg: TextView
 
     private val db = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
@@ -59,6 +61,8 @@ class HomeActivity : AppCompatActivity() {
         tvProgressPercent = findViewById(R.id.tvProgressPercent)
         budgetProgress = findViewById(R.id.budgetProgress)
         tvBudgetDateRange = findViewById(R.id.tvBudgetDateRange)
+        ivCharacter = findViewById(R.id.ivCharacter)
+        tvWarningMsg = findViewById(R.id.tvWarningMsg)
     }
 
     private fun setupListeners() {
@@ -72,7 +76,6 @@ class HomeActivity : AppCompatActivity() {
             startActivity(intent)
         }
 
-        // 하단 탭 네비게이션 (옆으로 넘기는 애니메이션 적용)
         findViewById<LinearLayout>(R.id.navBudget).setOnClickListener {
             val intent = Intent(this, BudgetSetupActivity::class.java)
             intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
@@ -120,11 +123,27 @@ class HomeActivity : AppCompatActivity() {
                     val percent = (totalSpent.toFloat() / budgetUsage.toFloat() * 100).toInt()
                     budgetProgress.progress = percent
                     tvProgressPercent.text = "$percent.0%"
+                    updateStatusByPercent(percent)
                 } else {
                     budgetProgress.progress = 0
                     tvProgressPercent.text = "0.0%"
+                    tvWarningMsg.text = "이번 주 예산을 설정하고 계획적인 소비를 시작해보세요!"
+                    ivCharacter.setImageResource(android.R.drawable.ic_menu_help)
                 }
             }
+    }
+
+    private fun updateStatusByPercent(percent: Int) {
+        val (resId, message) = when {
+            percent >= 100 -> R.drawable.home100 to "예산을 초과했어요! 당분간 지출을 멈춰야 해요."
+            percent >= 90 -> R.drawable.home90 to "경고! 예산의 거의 다 써가요. 정말 필요한 것만 사세요!"
+            percent >= 80 -> R.drawable.home80 to "주의하세요! 지출이 예산의 80%에 도달했습니다."
+            percent >= 50 -> R.drawable.home50 to "벌써 예산의 절반을 사용하셨네요. 조금만 아껴볼까요?"
+            else -> android.R.drawable.ic_menu_today to "포포가 당신의 소비를 지켜보고 있어요! 아주 잘하고 있어요."
+        }
+
+        tvWarningMsg.text = message
+        ivCharacter.setImageResource(resId)
     }
 
     private fun resetUI() {
@@ -133,5 +152,7 @@ class HomeActivity : AppCompatActivity() {
         tvBudgetDateRange.text = "설정된 예산이 없습니다"
         budgetProgress.progress = 0
         tvProgressPercent.text = "0.0%"
+        tvWarningMsg.text = "포포와 함께 현명한 소비 습관을 만들어봐요!"
+        ivCharacter.setImageResource(android.R.drawable.ic_menu_help)
     }
 }
