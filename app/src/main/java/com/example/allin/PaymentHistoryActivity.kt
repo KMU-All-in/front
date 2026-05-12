@@ -12,6 +12,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.allin.data.AppDatabase
 import com.example.allin.data.Payment
 import com.example.allin.data.PaymentRepository
+import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 
@@ -32,6 +33,7 @@ class PaymentHistoryActivity : AppCompatActivity() {
         setupToolbar()
         setupRecyclerView()
         setupSortSpinner()
+        setupAddButton()
         observePayments()
     }
 
@@ -39,13 +41,11 @@ class PaymentHistoryActivity : AppCompatActivity() {
         val toolbar = findViewById<Toolbar>(R.id.toolbar) ?: return
         setSupportActionBar(toolbar)
         
-        // 뒤로가기 버튼 활성화
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
         toolbar.setNavigationOnClickListener {
             finish()
         }
 
-        // 전체 삭제 기능 (툴바 제목 길게 누르기) - 테스트용 데이터 초기화
         toolbar.setOnLongClickListener {
             showClearAllConfirmDialog()
             true
@@ -80,6 +80,12 @@ class PaymentHistoryActivity : AppCompatActivity() {
         }
     }
 
+    private fun setupAddButton() {
+        findViewById<FloatingActionButton>(R.id.fabAdd)?.setOnClickListener {
+            showAddDialog()
+        }
+    }
+
     private fun observePayments() {
         lifecycleScope.launch {
             repository.allPayments.collectLatest { payments ->
@@ -91,6 +97,37 @@ class PaymentHistoryActivity : AppCompatActivity() {
                 adapter.submitList(sortedList)
             }
         }
+    }
+
+    private fun showAddDialog() {
+        val view = LayoutInflater.from(this).inflate(R.layout.dialog_edit_payment, null)
+        val etStore = view.findViewById<EditText>(R.id.etStoreName)
+        val etAmount = view.findViewById<EditText>(R.id.etAmount)
+
+        AlertDialog.Builder(this)
+            .setTitle("지출 내역 추가")
+            .setView(view)
+            .setPositiveButton("추가") { _, _ ->
+                val store = etStore.text.toString()
+                val amount = etAmount.text.toString().toIntOrNull() ?: 0
+                
+                if (store.isNotEmpty() && amount > 0) {
+                    lifecycleScope.launch {
+                        repository.insert(Payment(
+                            storeName = store,
+                            amount = amount,
+                            category = "기타",
+                            date = System.currentTimeMillis(),
+                            itemName = "직접 입력"
+                        ))
+                        Toast.makeText(this@PaymentHistoryActivity, "추가되었습니다.", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    Toast.makeText(this, "상점명과 금액을 정확히 입력해주세요.", Toast.LENGTH_SHORT).show()
+                }
+            }
+            .setNegativeButton("취소", null)
+            .show()
     }
 
     private fun showEditDialog(payment: Payment) {
