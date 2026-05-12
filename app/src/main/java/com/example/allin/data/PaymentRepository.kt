@@ -14,9 +14,10 @@ class PaymentRepository(private val paymentDao: PaymentDao) {
 
     // 결제 내역 추가
     suspend fun insert(payment: Payment) {
+        // 1. 먼저 로컬 Room DB에 저장
         paymentDao.insert(payment)
         
-        // Firestore 동기화 (로그인 된 경우)
+        // 2. Firestore 동기화 (로그인 된 경우)
         val user = auth.currentUser
         if (user != null) {
             val paymentData = hashMapOf(
@@ -24,22 +25,22 @@ class PaymentRepository(private val paymentDao: PaymentDao) {
                 "storeName" to payment.storeName,
                 "date" to payment.date,
                 "category" to payment.category,
-                "itemName" to payment.itemName
+                "itemName" to payment.itemName,
+                "timestamp" to com.google.firebase.Timestamp.now() // 정렬을 위한 타임스탬프 추가
             )
+            
+            // 파이어베이스의 'transactions' 컬렉션에 저장
             firestore.collection("users")
                 .document(user.uid)
-                .collection("payments")
+                .collection("transactions")
                 .add(paymentData)
         }
     }
 
-    // 결제 내역 수정
     suspend fun update(payment: Payment) {
         paymentDao.update(payment)
-        // 필요 시 Firestore 수정 로직도 추가 가능
     }
 
-    // 결제 내역 삭제
     suspend fun delete(payment: Payment) {
         paymentDao.delete(payment)
     }

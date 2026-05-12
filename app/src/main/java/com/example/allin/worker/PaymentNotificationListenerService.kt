@@ -12,6 +12,7 @@ import androidx.core.app.NotificationCompat
 import com.example.allin.R
 import com.example.allin.data.AppDatabase
 import com.example.allin.data.Payment
+import com.example.allin.data.PaymentRepository
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -20,6 +21,14 @@ import java.util.regex.Pattern
 class PaymentNotificationListenerService : NotificationListenerService() {
 
     private val scope = CoroutineScope(Dispatchers.IO)
+    private lateinit var repository: PaymentRepository
+
+    override fun onCreate() {
+        super.onCreate()
+        // Repository 초기화 (Dao 주입)
+        val dao = AppDatabase.getDatabase(applicationContext).paymentDao()
+        repository = PaymentRepository(dao)
+    }
 
     override fun onNotificationPosted(sbn: StatusBarNotification?) {
         super.onNotificationPosted(sbn)
@@ -29,6 +38,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
         val fullText = "$title $text"
 
+        // "결제", "승인" 키워드 혹은 "원" 단위가 포함된 알림만 가공
         if (fullText.contains("결제") || fullText.contains("승인") || fullText.contains("원")) {
             parseAndSavePayment(fullText)
         }
@@ -37,6 +47,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
     private fun parseAndSavePayment(content: String) {
         scope.launch {
             try {
+                // 1. 금액 추출 (예: 5,000원 -> 5000)
                 val amountPattern = Pattern.compile("([\\d,]+)원")
                 val amountMatcher = amountPattern.matcher(content)
                 var amount = 0
@@ -44,6 +55,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
                     amount = amountMatcher.group(1)?.replace(",", "")?.toIntOrNull() ?: 0
                 }
 
+                // 2. 상점명 추출 (알림의 첫 단어를 상점명으로 가정)
                 val storeName = content.split(" ").getOrNull(0) ?: "알 수 없는 상점"
 
                 if (amount > 0) {
@@ -55,14 +67,14 @@ class PaymentNotificationListenerService : NotificationListenerService() {
                         storeName = storeName
                     )
                     
-                    val dao = AppDatabase.getDatabase(applicationContext).paymentDao()
-                    dao.insert(payment)
+                    // 3. Repository를 통해 로컬 DB 저장 + Firestore(transactions) 동기화
+                    repository.insert(payment)
                     
-                    // 사용자에게 입력 완료 알림 보내기 (시나리오 4번)
+                    // 4. 입력 완료 시스템 알림 발송
                     sendCompletionNotification(storeName, amount)
                 }
             } catch (e: Exception) {
-                Log.e("PaymentListener", "분석 오류", e)
+                Log.e("PaymentListener", "결제 분석/저장 중 오류 발생", e)
             }
         }
     }
