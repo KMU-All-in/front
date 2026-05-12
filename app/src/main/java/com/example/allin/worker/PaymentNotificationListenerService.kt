@@ -26,6 +26,10 @@ class PaymentNotificationListenerService : NotificationListenerService() {
     private val scope = CoroutineScope(Dispatchers.IO)
     private lateinit var repository: PaymentRepository
 
+    private var lastAmount: Int = 0
+    private var lastProcessedTime: Long = 0
+    private val DUPLICATE_INTERVAL = 5000 
+
     override fun onCreate() {
         super.onCreate()
         val dao = AppDatabase.getDatabase(applicationContext).paymentDao()
@@ -38,71 +42,85 @@ class PaymentNotificationListenerService : NotificationListenerService() {
         val pkgName = sbn?.packageName ?: ""
         if (pkgName == packageName) return 
 
-        val msgApps = listOf("com.kakao.talk", "com.samsung.android.messaging", "com.google.android.apps.messaging")
-        
         val extras = sbn?.notification?.extras ?: return
         val title = extras.getString(Notification.EXTRA_TITLE) ?: ""
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
         val fullText = "$title $text"
 
-        // 1. 제외 키워드 체크 (입금, 환불 등)
         val excludeKeywords = listOf("입금", "환불", "취소", "입금완료")
         if (excludeKeywords.any { fullText.contains(it) }) return
 
-        // 2. 금액 패턴 확인: 숫자 뒤에 '원'이 있거나, 숫자만 3자리 이상 있는 경우
-        // ([\\d,]{3,}) : 쉼표 포함 숫자 3자리 이상
-        // (?:\\s*원)? : 뒤에 '원'이 올 수도 있고 안 올 수도 있음 (비캡쳐 그룹)
-        val amountPattern = Pattern.compile("([\\d,]{3,})\\s*(?:원)?")
-        val amountMatcher = amountPattern.matcher(fullText)
-        val hasAmount = amountMatcher.find()
+        // 1. 정교화된 금액 추출 호출
+        val amount = extractRealAmount(fullText)
+        if (amount <= 0) return
 
-        // 3. 결제 핵심 키워드 체크 ("출금" 추가)
+        val currentTime = System.currentTimeMillis()
+        if (amount == lastAmount && (currentTime - lastProcessedTime) < DUPLICATE_INTERVAL) {
+            return
+        }
+
         val payKeywords = listOf("승인", "결제", "일시불", "출금", "카드승인", "자동이체")
         val hasPayKeyword = payKeywords.any { fullText.contains(it) }
 
-        // 4. 메시징 앱 필터링 (메신저 앱은 키워드가 더 확실해야 함)
-        if (msgApps.contains(pkgName)) {
-            if (!hasPayKeyword) return
-        }
-
-        // 최종 조건: 금액 패턴이 발견되고 결제 키워드가 포함된 경우
-        if (hasAmount && hasPayKeyword) {
-            Log.d("PaymentListener", "결제/출금 알림 감지: $fullText")
-            parseAndSavePayment(fullText, title)
+        if (hasPayKeyword) {
+            lastAmount = amount
+            lastProcessedTime = currentTime
+            savePayment(fullText, title, amount)
         }
     }
 
-    private fun parseAndSavePayment(content: String, title: String) {
+    private fun extractRealAmount(content: String): Int {
+        // [1단계] "원"이 붙은 숫자 찾기 (가장 확실함)
+        val wonPattern = Pattern.compile("([\\d,]+)\\s*원")
+        val wonMatcher = wonPattern.matcher(content)
+        if (wonMatcher.find()) {
+            return wonMatcher.group(1).replace(",", "").toIntOrNull() ?: 0
+        }
+
+        // [2단계] 모든 숫자 후보군 추출 (3자리 이상)
+        val allNumbers = mutableListOf<String>()
+        val numPattern = Pattern.compile("[\\d,]{3,}")
+        val numMatcher = numPattern.matcher(content)
+        while (numMatcher.find()) {
+            allNumbers.add(numMatcher.group())
+        }
+
+        if (allNumbers.isEmpty()) return 0
+
+        // [3단계] 쉼표가 포함된 숫자가 있다면 그것이 금액일 확률이 매우 높음
+        val withComma = allNumbers.find { it.contains(",") }
+        if (withComma != null) return withComma.replace(",", "").toIntOrNull() ?: 0
+
+        // [4단계] 숫자가 여러 개일 때 카드번호(4자리) 필터링
+        if (allNumbers.size > 1) {
+            // 4자리가 아닌 숫자가 있다면 그것을 우선 선택 (보통 지출액은 4자리가 아니거나 카드번호보다 뒤에 옴)
+            val notFourDigits = allNumbers.filter { it.length != 4 }
+            if (notFourDigits.isNotEmpty()) return notFourDigits.last().replace(",", "").toIntOrNull() ?: 0
+        }
+
+        // [5단계] 마지막 보루: 가장 마지막에 등장한 숫자 선택
+        return allNumbers.last().replace(",", "").toIntOrNull() ?: 0
+    }
+
+    private fun savePayment(content: String, title: String, amount: Int) {
         scope.launch {
             try {
-                // 한 번 더 정확하게 금액 추출
-                val amountPattern = Pattern.compile("([\\d,]{3,})\\s*(?:원)?")
-                val amountMatcher = amountPattern.matcher(content)
-                var amount = 0
-                if (amountMatcher.find()) {
-                    val amountStr = amountMatcher.group(1)?.replace(",", "") ?: "0"
-                    amount = amountStr.toIntOrNull() ?: 0
-                }
-
-                // 상점명 추출 (제목이 있으면 제목 사용)
                 val storeName = if (title.length in 2..12 && !title.contains("메시지")) title else {
                     val parts = content.split(" ")
                     if (parts.size > 1) "${parts[0]} ${parts[1]}" else parts[0]
                 }
 
-                if (amount > 0) {
-                    val payment = Payment(
-                        amount = amount,
-                        category = "기타",
-                        date = System.currentTimeMillis(),
-                        itemName = "자동 입력",
-                        storeName = storeName
-                    )
-                    repository.insert(payment)
-                    sendCompletionNotification(storeName, amount)
-                }
+                val payment = Payment(
+                    amount = amount,
+                    category = "기타",
+                    date = System.currentTimeMillis(),
+                    itemName = "자동 입력",
+                    storeName = storeName
+                )
+                repository.insert(payment)
+                sendCompletionNotification(storeName, amount)
             } catch (e: Exception) {
-                Log.e("PaymentListener", "추출/저장 오류", e)
+                Log.e("PaymentListener", "저장 오류", e)
             }
         }
     }
@@ -122,7 +140,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
 
         val notification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("결제/출금 내역 기록됨")
+            .setContentTitle("지출 내역 기록됨")
             .setContentText("${store}에서 ${price}원이 기록되었습니다.")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
