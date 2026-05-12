@@ -36,9 +36,8 @@ class PaymentNotificationListenerService : NotificationListenerService() {
         super.onNotificationPosted(sbn)
 
         val pkgName = sbn?.packageName ?: ""
-        if (pkgName == packageName) return // 우리 앱 알림 제외
+        if (pkgName == packageName) return 
 
-        // 메시징 앱(카톡, 텔레그램, 기본 문자 앱 등) 필터링 - 일상 대화 중 "500원" 방지
         val msgApps = listOf("com.kakao.talk", "com.samsung.android.messaging", "com.google.android.apps.messaging")
         
         val extras = sbn?.notification?.extras ?: return
@@ -46,29 +45,29 @@ class PaymentNotificationListenerService : NotificationListenerService() {
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
         val fullText = "$title $text"
 
-        // 1. 일상 대화 앱에서 온 알림인데 "승인/결제" 단어가 없으면 무조건 무시
-        if (msgApps.contains(pkgName)) {
-            if (!fullText.contains("승인") && !fullText.contains("결제") && !fullText.contains("출금")) {
-                Log.d("PaymentListener", "메신저 앱의 일반 대화 무시: $fullText")
-                return
-            }
-        }
+        // 1. 제외 키워드 체크 (입금, 환불 등)
+        val excludeKeywords = listOf("입금", "환불", "취소", "입금완료")
+        if (excludeKeywords.any { fullText.contains(it) }) return
 
-        // 2. 금액 패턴 확인 (숫자 + 원)
-        val amountPattern = Pattern.compile("([\\d,]+)\\s*원")
+        // 2. 금액 패턴 확인: 숫자 뒤에 '원'이 있거나, 숫자만 3자리 이상 있는 경우
+        // ([\\d,]{3,}) : 쉼표 포함 숫자 3자리 이상
+        // (?:\\s*원)? : 뒤에 '원'이 올 수도 있고 안 올 수도 있음 (비캡쳐 그룹)
+        val amountPattern = Pattern.compile("([\\d,]{3,})\\s*(?:원)?")
         val amountMatcher = amountPattern.matcher(fullText)
         val hasAmount = amountMatcher.find()
 
-        // 3. 결제 핵심 키워드 체크
-        val payKeywords = listOf("승인", "결제완료", "일시불", "출금완료", "카드승인", "자동이체")
+        // 3. 결제 핵심 키워드 체크 ("출금" 추가)
+        val payKeywords = listOf("승인", "결제", "일시불", "출금", "카드승인", "자동이체")
         val hasPayKeyword = payKeywords.any { fullText.contains(it) }
 
-        // 4. 입금/환불 등 제외어
-        val excludeKeywords = listOf("입금", "환불", "취소", "입금완료")
-        val isExcluded = excludeKeywords.any { fullText.contains(it) }
+        // 4. 메시징 앱 필터링 (메신저 앱은 키워드가 더 확실해야 함)
+        if (msgApps.contains(pkgName)) {
+            if (!hasPayKeyword) return
+        }
 
-        // 최종 조건: 금액이 있고 + 결제 키워드가 있고 + 제외어가 없어야 함
-        if (hasAmount && hasPayKeyword && !isExcluded) {
+        // 최종 조건: 금액 패턴이 발견되고 결제 키워드가 포함된 경우
+        if (hasAmount && hasPayKeyword) {
+            Log.d("PaymentListener", "결제/출금 알림 감지: $fullText")
             parseAndSavePayment(fullText, title)
         }
     }
@@ -76,7 +75,8 @@ class PaymentNotificationListenerService : NotificationListenerService() {
     private fun parseAndSavePayment(content: String, title: String) {
         scope.launch {
             try {
-                val amountPattern = Pattern.compile("([\\d,]+)\\s*원")
+                // 한 번 더 정확하게 금액 추출
+                val amountPattern = Pattern.compile("([\\d,]{3,})\\s*(?:원)?")
                 val amountMatcher = amountPattern.matcher(content)
                 var amount = 0
                 if (amountMatcher.find()) {
@@ -84,8 +84,11 @@ class PaymentNotificationListenerService : NotificationListenerService() {
                     amount = amountStr.toIntOrNull() ?: 0
                 }
 
-                // 상점명 추출 로직: 타이틀(카드사/은행)을 상점명으로 사용하거나 내용의 첫 단어 사용
-                val storeName = if (title.length in 2..10 && !title.contains("메시지")) title else content.split(" ").getOrNull(0) ?: "알 수 없는 상점"
+                // 상점명 추출 (제목이 있으면 제목 사용)
+                val storeName = if (title.length in 2..12 && !title.contains("메시지")) title else {
+                    val parts = content.split(" ")
+                    if (parts.size > 1) "${parts[0]} ${parts[1]}" else parts[0]
+                }
 
                 if (amount > 0) {
                     val payment = Payment(
@@ -99,7 +102,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
                     sendCompletionNotification(storeName, amount)
                 }
             } catch (e: Exception) {
-                Log.e("PaymentListener", "저장 오류", e)
+                Log.e("PaymentListener", "추출/저장 오류", e)
             }
         }
     }
@@ -119,8 +122,8 @@ class PaymentNotificationListenerService : NotificationListenerService() {
 
         val notification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("결제 내역 자동 기록됨")
-            .setContentText("${store}에서 ${price}원을 사용하셨습니다.")
+            .setContentTitle("결제/출금 내역 기록됨")
+            .setContentText("${store}에서 ${price}원이 기록되었습니다.")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)

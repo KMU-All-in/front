@@ -145,8 +145,11 @@ class PaymentHistoryActivity : AppCompatActivity() {
                 val newStore = etStore.text.toString()
                 val newAmount = etAmount.text.toString().toIntOrNull() ?: payment.amount
                 
+                val updatedPayment = payment.copy(storeName = newStore, amount = newAmount)
+                
                 lifecycleScope.launch {
-                    repository.update(payment.copy(storeName = newStore, amount = newAmount))
+                    // [수정] old와 new 데이터를 모두 전달하여 서버 총액 차액 계산 가능하게 함
+                    repository.update(payment, updatedPayment)
                     Toast.makeText(this@PaymentHistoryActivity, "수정되었습니다.", Toast.LENGTH_SHORT).show()
                 }
             }

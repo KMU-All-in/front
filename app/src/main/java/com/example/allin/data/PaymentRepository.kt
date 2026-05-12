@@ -27,16 +27,37 @@ class PaymentRepository(private val paymentDao: PaymentDao) {
                 "timestamp" to com.google.firebase.Timestamp.now()
             )
             
-            firestore.collection("users")
-                .document(user.uid)
-                .collection("transactions")
-                .add(paymentData)
+            firestore.collection("users").document(user.uid)
+                .collection("transactions").add(paymentData)
 
-            updateReportTotalSpent(user.uid, payment.amount)
+            updateReportTotalSpent(user.uid, payment.amount.toLong())
         }
     }
 
-    private fun updateReportTotalSpent(uid: String, amount: Int) {
+    // [수정] 차액만큼 서버 총액 업데이트
+    suspend fun update(oldPayment: Payment, newPayment: Payment) {
+        paymentDao.update(newPayment)
+        
+        val user = auth.currentUser
+        if (user != null) {
+            val diff = (newPayment.amount - oldPayment.amount).toLong()
+            if (diff != 0L) {
+                updateReportTotalSpent(user.uid, diff)
+            }
+        }
+    }
+
+    // [수정] 삭제 시 서버 총액에서 차감
+    suspend fun delete(payment: Payment) {
+        paymentDao.delete(payment)
+        
+        val user = auth.currentUser
+        if (user != null) {
+            updateReportTotalSpent(user.uid, -(payment.amount.toLong()))
+        }
+    }
+
+    private fun updateReportTotalSpent(uid: String, amountDelta: Long) {
         firestore.collection("users").document(uid)
             .collection("reports")
             .orderBy("start_date", Query.Direction.DESCENDING)
@@ -47,26 +68,19 @@ class PaymentRepository(private val paymentDao: PaymentDao) {
                     val docId = snapshots.documents[0].id
                     firestore.collection("users").document(uid)
                         .collection("reports").document(docId)
-                        .update("total_spent", FieldValue.increment(amount.toLong()))
+                        .update("total_spent", FieldValue.increment(amountDelta))
                 }
             }
     }
 
-    // 완전한 초기화 기능 (로컬 DB + 서버 내역 + 서버 총액)
     suspend fun deleteAll() {
-        // 1. 로컬 DB 삭제
         paymentDao.deleteAll()
-        
         val user = auth.currentUser
         if (user != null) {
             val userRef = firestore.collection("users").document(user.uid)
-
-            // 2. 서버의 모든 결제 내역(transactions) 삭제
             userRef.collection("transactions").get().addOnSuccessListener { snapshots ->
                 for (doc in snapshots) doc.reference.delete()
             }
-
-            // 3. 서버 리포트의 총 지출액을 0으로 초기화
             userRef.collection("reports")
                 .orderBy("start_date", Query.Direction.DESCENDING)
                 .limit(1)
@@ -77,13 +91,5 @@ class PaymentRepository(private val paymentDao: PaymentDao) {
                     }
                 }
         }
-    }
-
-    suspend fun update(payment: Payment) {
-        paymentDao.update(payment)
-    }
-
-    suspend fun delete(payment: Payment) {
-        paymentDao.delete(payment)
     }
 }
