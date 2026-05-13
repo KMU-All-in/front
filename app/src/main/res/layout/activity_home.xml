@@ -116,7 +116,13 @@
                     android:backgroundTint="#F3E5F5">
                     <TextView android:id="@+id/tvWarningMsg" android:layout_width="wrap_content" android:layout_height="wrap_content" android:padding="12dp" android:text="포포가 당신의 소비를 지켜보고 있어요!" android:textColor="#9C27B0" android:textSize="12sp" android:textStyle="bold"/>
                 </androidx.cardview.widget.CardView>
-                <ImageView android:id="@+id/ivCharacter" android:layout_width="140dp" android:layout_height="140dp" android:layout_marginTop="12dp" android:src="@android:drawable/ic_menu_help" />
+
+                <ImageView
+                    android:id="@+id/ivCharacter"
+                    android:layout_width="257dp"
+                    android:layout_height="287dp"
+                    android:layout_marginTop="12dp"
+                    android:src="@android:drawable/ic_menu_help" />
             </LinearLayout>
 
             <!-- 앱 잠금 카드 -->

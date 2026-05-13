@@ -103,8 +103,8 @@ class HomeActivity : AppCompatActivity() {
             percent >= 100 -> R.drawable.home100 to "예산을 초과했어요! 지출을 멈추세요."
             percent >= 90 -> R.drawable.home90 to "개큰경고! 예산의 90%를 넘었습니다."
             percent >= 80 -> R.drawable.home80 to "경고! 예산의 80%를 넘었습니다."
-            percent >= 50 -> R.drawable.home50 to "예산의 50% 사용. 이대로만 고고띵~"
-            else -> android.R.drawable.ic_menu_today to "포포가 당신의 소비를 응원해요!"
+            percent >= 50 -> R.drawable.dog_happy to "예산의 50% 사용. 이대로만 고고띵~"
+            else -> R.drawable.dog_default to "포포가 당신의 소비를 응원해요!"
         }
         tvWarningMsg.text = message
         ivCharacter.setImageResource(resId)
