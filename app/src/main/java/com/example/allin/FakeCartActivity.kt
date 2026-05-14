@@ -15,8 +15,10 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
+import androidx.work.*
 import com.example.allin.data.FakeCartRepository
 import com.example.allin.data.FakeProduct
+import com.example.allin.worker.FakeCartWorker
 import com.google.firebase.auth.FirebaseAuth
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -73,17 +75,27 @@ class FakeCartActivity : AppCompatActivity() {
 
         try {
             repository = FakeCartRepository()
-
             if (!initViews()) return
             setupListeners()
             observeCartItems()
-            
+            scheduleExpiryCheck()
             dimView.post { selectTab(0) }
         } catch (e: Exception) {
             Log.e("FakeCartActivity", "Error in onCreate", e)
-            Toast.makeText(this, "화면 로드 중 오류가 발생했습니다.", Toast.LENGTH_LONG).show()
             finish()
         }
+    }
+
+    private fun scheduleExpiryCheck() {
+        val workRequest = PeriodicWorkRequestBuilder<FakeCartWorker>(1, TimeUnit.DAYS)
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "FakeCartExpiryWork",
+            ExistingPeriodicWorkPolicy.KEEP,
+            workRequest
+        )
     }
 
     private fun hideSystemBars() {
@@ -92,42 +104,33 @@ class FakeCartActivity : AppCompatActivity() {
         windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
     }
 
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) hideSystemBars()
-    }
-
     private fun initViews(): Boolean {
-        return try {
-            cartItemsContainer = findViewById(R.id.cartItemsContainer)
-            cardAddProduct = findViewById(R.id.cardAddProduct)
-            cardAddReason = findViewById(R.id.cardAddReason)
-            dimView = findViewById(R.id.dimView)
+        cartItemsContainer = findViewById(R.id.cartItemsContainer)
+        cardAddProduct = findViewById(R.id.cardAddProduct)
+        cardAddReason = findViewById(R.id.cardAddReason)
+        dimView = findViewById(R.id.dimView)
 
-            tabUrl = findViewById(R.id.tabUrl)
-            tabPhoto = findViewById(R.id.tabPhoto)
-            tabManual = findViewById(R.id.tabManual)
+        tabUrl = findViewById(R.id.tabUrl)
+        tabPhoto = findViewById(R.id.tabPhoto)
+        tabManual = findViewById(R.id.tabManual)
 
-            layoutUrlInput = findViewById(R.id.layoutUrlInput)
-            layoutPhotoInput = findViewById(R.id.layoutPhotoInput)
-            layoutManualInput = findViewById(R.id.layoutManualInput)
+        layoutUrlInput = findViewById(R.id.layoutUrlInput)
+        layoutPhotoInput = findViewById(R.id.layoutPhotoInput)
+        layoutManualInput = findViewById(R.id.layoutManualInput)
 
-            etUrlInput = findViewById(R.id.etUrlInput)
-            etManualName = findViewById(R.id.etManualName)
-            etManualPrice = findViewById(R.id.etManualPrice)
-            spExpiry = findViewById(R.id.spExpiry)
-            btnSubmit = findViewById(R.id.btnSubmit)
+        etUrlInput = findViewById(R.id.etUrlInput)
+        etManualName = findViewById(R.id.etManualName)
+        etManualPrice = findViewById(R.id.etManualPrice)
+        spExpiry = findViewById(R.id.spExpiry)
+        btnSubmit = findViewById(R.id.btnSubmit)
 
-            etNewReason = findViewById(R.id.etNewReason)
-            btnSubmitReason = findViewById(R.id.btnSubmitReason)
+        etNewReason = findViewById(R.id.etNewReason)
+        btnSubmitReason = findViewById(R.id.btnSubmitReason)
 
-            val expiryOptions = arrayOf("1일", "3일", "7일(권장)", "14일", "30일")
-            spExpiry.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, expiryOptions)
-            spExpiry.setSelection(2) 
-            true
-        } catch (e: Exception) {
-            false
-        }
+        val expiryOptions = arrayOf("1일", "3일", "7일(권장)", "14일", "30일")
+        spExpiry.adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, expiryOptions)
+        spExpiry.setSelection(2) 
+        return true
     }
 
     private fun setupListeners() {
@@ -142,24 +145,8 @@ class FakeCartActivity : AppCompatActivity() {
         btnSubmit.setOnClickListener { validateAndSaveProduct() }
         btnSubmitReason.setOnClickListener { saveNewReason() }
 
-        layoutPhotoInput.setOnClickListener {
-            showErrorDialog("카테고리 분류 오류 가능성", "카테고리 분류 오류 가능성이 있습니다. 직접 재분류하시겠습니까?") {
-                selectTab(2)
-            }
-        }
-
-        // 하단 네비게이션 애니메이션 추가
         findViewById<LinearLayout>(R.id.navHome).setOnClickListener {
-            val intent = Intent(this, HomeActivity::class.java)
-            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-            startActivity(intent)
-            overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
-        }
-        findViewById<LinearLayout>(R.id.navBudget).setOnClickListener {
-            val intent = Intent(this, BudgetSetupActivity::class.java)
-            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-            startActivity(intent)
-            overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
+            startActivity(Intent(this, HomeActivity::class.java).apply { addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT) })
         }
     }
 
@@ -180,12 +167,6 @@ class FakeCartActivity : AppCompatActivity() {
         layoutUrlInput.visibility = if (index == 0) View.VISIBLE else View.GONE
         layoutPhotoInput.visibility = if (index == 1) View.VISIBLE else View.GONE
         layoutManualInput.visibility = if (index == 2) View.VISIBLE else View.GONE
-
-        btnSubmit.text = if (editingProduct != null) "수정 완료" else when(index) {
-            0 -> "URL에서 상품 정보 가져오기"
-            1 -> "사진 선택하기"
-            else -> "장바구니에 담기"
-        }
     }
 
     private fun observeCartItems() {
@@ -202,96 +183,37 @@ class FakeCartActivity : AppCompatActivity() {
         val now = System.currentTimeMillis()
 
         for (product in products) {
-            try {
-                val itemView = LayoutInflater.from(this).inflate(R.layout.item_cart_product, cartItemsContainer, false)
-                val diffInMillis = (product.addedTime + TimeUnit.DAYS.toMillis(product.expiryDays.toLong())) - now
-                val diffInDays = TimeUnit.MILLISECONDS.toDays(diffInMillis)
-                val dDayText = if (diffInDays <= 0) "D-Day" else "D-$diffInDays"
-                
-                itemView.findViewById<TextView>(R.id.tvRemainingDays)?.text = dDayText
-                itemView.findViewById<TextView>(R.id.tvProductName)?.text = product.name
-                itemView.findViewById<TextView>(R.id.tvProductPrice)?.text = "${dec.format(product.price)}원"
-                
-                val tvUrl = itemView.findViewById<TextView>(R.id.tvProductUrl)
-                tvUrl?.text = if(product.url.isNullOrEmpty()) "직접 입력됨" else product.url
-
-                val reasonsText = if (product.reasons.isEmpty()) "아직 작성된 이유가 없습니다."
-                else product.reasons.joinToString("\n") { "• $it" }
-                itemView.findViewById<TextView>(R.id.tvReasonsSummary)?.text = reasonsText
-
-                itemView.findViewById<Button>(R.id.btnAddReason)?.setOnClickListener { showAddReasonPopup(product) }
-                
-                itemView.findViewById<ImageButton>(R.id.btnOptions)?.setOnClickListener { view ->
-                    val popup = PopupMenu(this, view)
-                    popup.menu.add("수정")
-                    popup.menu.add("기간 연장")
-                    popup.menu.add("삭제")
-                    popup.setOnMenuItemClickListener { item ->
-                        when (item.title) {
-                            "수정" -> showEditProductPopup(product)
-                            "기간 연장" -> showExtendPeriodDialog(product)
-                            "삭제" -> showDeleteConfirmDialog(product)
-                        }
-                        true
-                    }
-                    popup.show()
-                }
-                
-                cartItemsContainer.addView(itemView)
-            } catch (e: Exception) {
-                Log.e("FakeCartActivity", "Error rendering item", e)
-            }
-        }
-    }
-
-    private fun showExtendPeriodDialog(product: FakeProduct) {
-        val options = arrayOf("1일 연장", "3일 연장", "7일 연장", "14일 연장")
-        AlertDialog.Builder(this)
-            .setTitle("숙고 기간 연장")
-            .setItems(options) { _, which ->
-                val addedDays = when(which) {
-                    0 -> 1; 1 -> 3; 2 -> 7; else -> 14
-                }
-                lifecycleScope.launch {
-                    val updatedProduct = product.copy(expiryDays = product.expiryDays + addedDays)
-                    repository.insert(updatedProduct)
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(this@FakeCartActivity, "${addedDays}일 연장되었습니다.", Toast.LENGTH_SHORT).show()
-                    }
-                }
-            }.show()
-    }
-
-    private fun showDeleteConfirmDialog(product: FakeProduct) {
-        AlertDialog.Builder(this)
-            .setTitle("상품 삭제")
-            .setMessage("'${product.name}'을(를) 삭제하시겠습니까?")
-            .setPositiveButton("삭제") { _, _ ->
+            val expiryTime = product.addedTime + TimeUnit.DAYS.toMillis(product.expiryDays.toLong())
+            if (now >= expiryTime) {
                 lifecycleScope.launch { repository.delete(product) }
+                continue
             }
-            .setNegativeButton("취소", null)
-            .show()
-    }
 
-    private fun showEditProductPopup(product: FakeProduct) {
-        editingProduct = product
-        dimView.visibility = View.VISIBLE
-        cardAddProduct.visibility = View.VISIBLE
-        
-        if (product.url.isNotEmpty()) {
-            selectTab(0)
-            etUrlInput.setText(product.url)
-        } else {
-            selectTab(2)
-            etManualName.setText(product.name)
-            etManualPrice.setText(product.price.toString())
+            val itemView = LayoutInflater.from(this).inflate(R.layout.item_cart_product, cartItemsContainer, false)
+            val diffInMillis = expiryTime - now
+            val diffInDays = TimeUnit.MILLISECONDS.toDays(diffInMillis)
+            val dDayText = if (diffInDays <= 0L) "D-Day" else "D-$diffInDays"
+            
+            itemView.findViewById<TextView>(R.id.tvRemainingDays)?.text = dDayText
+            itemView.findViewById<TextView>(R.id.tvProductName)?.text = product.name
+            itemView.findViewById<TextView>(R.id.tvProductPrice)?.text = "${dec.format(product.price)}원"
+            
+            val reasonsText = if (product.reasons.isEmpty()) "아직 작성된 이유가 없습니다."
+            else product.reasons.joinToString("\n") { "• $it" }
+            itemView.findViewById<TextView>(R.id.tvReasonsSummary)?.text = reasonsText
+
+            itemView.findViewById<Button>(R.id.btnAddReason)?.setOnClickListener { showAddReasonPopup(product) }
+            itemView.findViewById<ImageButton>(R.id.btnOptions)?.setOnClickListener { view ->
+                val popup = PopupMenu(this, view)
+                popup.menu.add("삭제")
+                popup.setOnMenuItemClickListener { _ ->
+                    lifecycleScope.launch { repository.delete(product) }
+                    true
+                }
+                popup.show()
+            }
+            cartItemsContainer.addView(itemView)
         }
-        
-        val expiryIndex = when(product.expiryDays) {
-            1 -> 0; 3 -> 1; 14 -> 3; 30 -> 4; else -> 2
-        }
-        spExpiry.setSelection(expiryIndex)
-        btnSubmit.text = "수정 완료"
     }
 
     private fun showAddReasonPopup(product: FakeProduct) {
@@ -317,60 +239,27 @@ class FakeCartActivity : AppCompatActivity() {
 
     private fun validateAndSaveProduct() {
         lifecycleScope.launch {
-            var name = ""
-            var price = 0
-            var url = ""
+            var name = etManualName.text.toString()
+            var price = etManualPrice.text.toString().toIntOrNull() ?: 0
+            val url = etUrlInput.text.toString()
             val expiryDays = when(spExpiry.selectedItemPosition) {
                 0 -> 1; 1 -> 3; 3 -> 14; 4 -> 30; else -> 7
             }
 
-            when(currentTabIndex) {
-                0 -> {
-                    url = etUrlInput.text.toString().trim()
-                    if (url.isEmpty()) return@launch
-                    btnSubmit.text = if (editingProduct != null) "수정 중..." else "분석 중..."
-                    btnSubmit.isEnabled = false
-                    
-                    try {
-                        name = withContext(Dispatchers.IO) {
-                            val doc = Jsoup.connect(url).timeout(5000).get()
-                            doc.title().split(":")[0].trim()
-                        }
-                    } catch (e: Exception) {
-                        withContext(Dispatchers.Main) {
-                            btnSubmit.isEnabled = true
-                            btnSubmit.text = if (editingProduct != null) "수정 완료" else "URL에서 상품 정보 가져오기"
-                            showErrorDialog(
-                                "상품 정보를 불러올 수 없습니다.",
-                                "네트워크 오류 또는 지원하지 않는 URL입니다. 직접 입력하시겠습니까?"
-                            ) {
-                                selectTab(2)
-                            }
-                        }
-                        return@launch
+            if (currentTabIndex == 0 && url.isNotEmpty()) {
+                try {
+                    val docTitle = withContext(Dispatchers.IO) {
+                        Jsoup.connect(url).get().title()
                     }
-                    btnSubmit.isEnabled = true
-                }
-                2 -> {
-                    name = etManualName.text.toString().trim()
-                    val priceStr = etManualPrice.text.toString().trim()
-                    if (name.isEmpty() || priceStr.isEmpty()) return@launch
-                    price = priceStr.toIntOrNull() ?: 0
-                }
-                else -> {
-                    Toast.makeText(this@FakeCartActivity, "준비 중인 기능입니다.", Toast.LENGTH_SHORT).show()
-                    return@launch 
+                    name = docTitle.split(":")[0].trim()
+                } catch (e: Exception) {
+                    Log.e("FakeCart", "Jsoup error", e)
                 }
             }
 
-            val product = editingProduct?.copy(
-                name = name,
-                price = price,
-                url = url,
-                expiryDays = expiryDays
-            ) ?: FakeProduct(
+            val product = FakeProduct(
                 id = UUID.randomUUID().toString(),
-                name = name,
+                name = name.ifEmpty { "상품명 없음" },
                 category = "기타",
                 price = price,
                 url = url,
@@ -381,40 +270,18 @@ class FakeCartActivity : AppCompatActivity() {
             )
 
             repository.insert(product)
-            withContext(Dispatchers.Main) { 
-                hidePopups()
-                val msg = if (editingProduct != null) "수정되었습니다." else "장바구니에 추가되었습니다."
-                Toast.makeText(this@FakeCartActivity, msg, Toast.LENGTH_SHORT).show()
-                editingProduct = null
-            }
+            withContext(Dispatchers.Main) { hidePopups() }
         }
     }
 
-    private fun showErrorDialog(title: String, message: String, onPositive: () -> Unit) {
-        AlertDialog.Builder(this)
-            .setTitle(title)
-            .setMessage(message)
-            .setPositiveButton("직접 입력/재분류") { _, _ -> onPositive() }
-            .setNegativeButton("취소", null)
-            .show()
-    }
-
     private fun showAddProductPopup() {
-        editingProduct = null
         dimView.visibility = View.VISIBLE
         cardAddProduct.visibility = View.VISIBLE
-        etUrlInput.setText("")
-        etManualName.setText("")
-        etManualPrice.setText("")
-        btnSubmit.text = "장바구니에 담기"
     }
 
     private fun hidePopups() {
         dimView.visibility = View.GONE
         cardAddProduct.visibility = View.GONE
         cardAddReason.visibility = View.GONE
-        etUrlInput.setText(""); etManualName.setText(""); etManualPrice.setText("")
-        editingProduct = null
-        selectTab(currentTabIndex)
     }
 }

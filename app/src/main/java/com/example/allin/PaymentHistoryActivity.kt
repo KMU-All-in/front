@@ -2,6 +2,7 @@ package com.example.allin
 
 import android.os.Bundle
 import android.view.LayoutInflater
+import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -22,6 +23,9 @@ class PaymentHistoryActivity : AppCompatActivity() {
     private lateinit var adapter: PaymentAdapter
     private lateinit var rvPayments: RecyclerView
     private lateinit var spinnerSort: Spinner
+    
+    // 카테고리 목록 정의
+    private val categories = arrayOf("식품/음료", "패션/의류", "뷰티/화장품", "전자기기", "도서/문구", "생활용품", "스포츠/레저", "기타")
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -73,7 +77,7 @@ class PaymentHistoryActivity : AppCompatActivity() {
         spinnerSort.adapter = adapterSort
         
         spinnerSort.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(p0: AdapterView<*>?, p1: android.view.View?, p2: Int, p3: Long) {
+            override fun onItemSelected(p0: AdapterView<*>?, p1: View?, p2: Int, p3: Long) {
                 observePayments() 
             }
             override fun onNothingSelected(p0: AdapterView<*>?) {}
@@ -103,6 +107,12 @@ class PaymentHistoryActivity : AppCompatActivity() {
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_edit_payment, null)
         val etStore = view.findViewById<EditText>(R.id.etStoreName)
         val etAmount = view.findViewById<EditText>(R.id.etAmount)
+        val spCategory = view.findViewById<Spinner>(R.id.spCategory)
+
+        // 카테고리 스피너 설정
+        val categoryAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, categories)
+        spCategory.adapter = categoryAdapter
+        spCategory.setSelection(categories.indexOf("기타"))
 
         AlertDialog.Builder(this)
             .setTitle("지출 내역 추가")
@@ -110,16 +120,18 @@ class PaymentHistoryActivity : AppCompatActivity() {
             .setPositiveButton("추가") { _, _ ->
                 val store = etStore.text.toString()
                 val amount = etAmount.text.toString().toIntOrNull() ?: 0
+                val category = spCategory.selectedItem.toString()
                 
                 if (store.isNotEmpty() && amount > 0) {
                     lifecycleScope.launch {
+                        // [수정] context를 전달하여 예산 알림이 가도록 함
                         repository.insert(Payment(
                             storeName = store,
                             amount = amount,
-                            category = "기타",
+                            category = category,
                             date = System.currentTimeMillis(),
                             itemName = "직접 입력"
-                        ))
+                        ), this@PaymentHistoryActivity)
                         Toast.makeText(this@PaymentHistoryActivity, "추가되었습니다.", Toast.LENGTH_SHORT).show()
                     }
                 } else {
@@ -134,9 +146,16 @@ class PaymentHistoryActivity : AppCompatActivity() {
         val view = LayoutInflater.from(this).inflate(R.layout.dialog_edit_payment, null)
         val etStore = view.findViewById<EditText>(R.id.etStoreName)
         val etAmount = view.findViewById<EditText>(R.id.etAmount)
+        val spCategory = view.findViewById<Spinner>(R.id.spCategory)
         
         etStore.setText(payment.storeName)
         etAmount.setText(payment.amount.toString())
+
+        // 카테고리 스피너 설정 및 기존 값 선택
+        val categoryAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, categories)
+        spCategory.adapter = categoryAdapter
+        val categoryIndex = categories.indexOf(payment.category)
+        if (categoryIndex >= 0) spCategory.setSelection(categoryIndex)
 
         AlertDialog.Builder(this)
             .setTitle("결제 내역 수정")
@@ -144,12 +163,17 @@ class PaymentHistoryActivity : AppCompatActivity() {
             .setPositiveButton("완료") { _, _ ->
                 val newStore = etStore.text.toString()
                 val newAmount = etAmount.text.toString().toIntOrNull() ?: payment.amount
+                val newCategory = spCategory.selectedItem.toString()
                 
-                val updatedPayment = payment.copy(storeName = newStore, amount = newAmount)
+                val updatedPayment = payment.copy(
+                    storeName = newStore, 
+                    amount = newAmount,
+                    category = newCategory
+                )
                 
                 lifecycleScope.launch {
-                    // [수정] old와 new 데이터를 모두 전달하여 서버 총액 차액 계산 가능하게 함
-                    repository.update(payment, updatedPayment)
+                    // [수정] context를 전달하여 예산 알림이 가도록 함
+                    repository.update(payment, updatedPayment, this@PaymentHistoryActivity)
                     Toast.makeText(this@PaymentHistoryActivity, "수정되었습니다.", Toast.LENGTH_SHORT).show()
                 }
             }
@@ -163,7 +187,8 @@ class PaymentHistoryActivity : AppCompatActivity() {
             .setMessage("이 결제 내용을 삭제하시겠습니까?")
             .setPositiveButton("삭제") { _, _ ->
                 lifecycleScope.launch {
-                    repository.delete(payment)
+                    // [수정] context를 전달하여 예산 알림이 가도록 함
+                    repository.delete(payment, this@PaymentHistoryActivity)
                     Toast.makeText(this@PaymentHistoryActivity, "삭제되었습니다.", Toast.LENGTH_SHORT).show()
                 }
             }

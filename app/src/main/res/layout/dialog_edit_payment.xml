@@ -19,4 +19,18 @@
         android:layout_marginTop="10dp"
         android:hint="금액"
         android:inputType="number" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="15dp"
+        android:text="카테고리"
+        android:textSize="14sp"
+        android:textColor="#666666" />
+
+    <Spinner
+        android:id="@+id/spCategory"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="5dp" />
 </LinearLayout>

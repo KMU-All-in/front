@@ -47,10 +47,11 @@ class PaymentNotificationListenerService : NotificationListenerService() {
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
         val fullText = "$title $text"
 
-        val excludeKeywords = listOf("입금", "환불", "취소", "입금완료")
+        // 1. 제외 키워드 체크 (광고 포함)
+        val excludeKeywords = listOf("입금", "환불", "취소", "입금완료", "(광고)", "광고")
         if (excludeKeywords.any { fullText.contains(it) }) return
 
-        // 1. 정교화된 금액 추출 호출
+        // 2. 정교화된 금액 추출 호출
         val amount = extractRealAmount(fullText)
         if (amount <= 0) return
 
@@ -70,14 +71,12 @@ class PaymentNotificationListenerService : NotificationListenerService() {
     }
 
     private fun extractRealAmount(content: String): Int {
-        // [1단계] "원"이 붙은 숫자 찾기 (가장 확실함)
         val wonPattern = Pattern.compile("([\\d,]+)\\s*원")
         val wonMatcher = wonPattern.matcher(content)
         if (wonMatcher.find()) {
             return wonMatcher.group(1).replace(",", "").toIntOrNull() ?: 0
         }
 
-        // [2단계] 모든 숫자 후보군 추출 (3자리 이상)
         val allNumbers = mutableListOf<String>()
         val numPattern = Pattern.compile("[\\d,]{3,}")
         val numMatcher = numPattern.matcher(content)
@@ -87,18 +86,14 @@ class PaymentNotificationListenerService : NotificationListenerService() {
 
         if (allNumbers.isEmpty()) return 0
 
-        // [3단계] 쉼표가 포함된 숫자가 있다면 그것이 금액일 확률이 매우 높음
         val withComma = allNumbers.find { it.contains(",") }
         if (withComma != null) return withComma.replace(",", "").toIntOrNull() ?: 0
 
-        // [4단계] 숫자가 여러 개일 때 카드번호(4자리) 필터링
         if (allNumbers.size > 1) {
-            // 4자리가 아닌 숫자가 있다면 그것을 우선 선택 (보통 지출액은 4자리가 아니거나 카드번호보다 뒤에 옴)
             val notFourDigits = allNumbers.filter { it.length != 4 }
             if (notFourDigits.isNotEmpty()) return notFourDigits.last().replace(",", "").toIntOrNull() ?: 0
         }
 
-        // [5단계] 마지막 보루: 가장 마지막에 등장한 숫자 선택
         return allNumbers.last().replace(",", "").toIntOrNull() ?: 0
     }
 
@@ -110,22 +105,42 @@ class PaymentNotificationListenerService : NotificationListenerService() {
                     if (parts.size > 1) "${parts[0]} ${parts[1]}" else parts[0]
                 }
 
+                // 카테고리 자동 분류
+                val category = classifyCategory(storeName, content)
+
                 val payment = Payment(
                     amount = amount,
-                    category = "기타",
+                    category = category,
                     date = System.currentTimeMillis(),
                     itemName = "자동 입력",
                     storeName = storeName
                 )
-                repository.insert(payment)
-                sendCompletionNotification(storeName, amount)
+                // [수정] context를 전달하여 예산 알림이 가능하게 함
+                repository.insert(payment, applicationContext)
+                sendCompletionNotification(storeName, amount, category)
             } catch (e: Exception) {
                 Log.e("PaymentListener", "저장 오류", e)
             }
         }
     }
 
-    private fun sendCompletionNotification(store: String, price: Int) {
+    private fun classifyCategory(storeName: String, fullText: String): String {
+        val lowerStore = storeName.lowercase()
+        val lowerText = fullText.lowercase()
+
+        return when {
+            listOf("마트", "편의점", "식당", "카페", "커피", "베이커리", "음식점", "배달", "치킨", "피자", "GS25", "CU", "세븐일레븐").any { lowerStore.contains(it) || lowerText.contains(it) } -> "식품/음료"
+            listOf("백화점", "쇼핑", "몰", "의류", "패션", "무신사", "지그재그").any { lowerStore.contains(it) || lowerText.contains(it) } -> "패션/의류"
+            listOf("올리브영", "화장품", "뷰티", "헤어", "미용실").any { lowerStore.contains(it) || lowerText.contains(it) } -> "뷰티/화장품"
+            listOf("하이마트", "전자", "애플", "삼성", "컴퓨터").any { lowerStore.contains(it) || lowerText.contains(it) } -> "전자기기"
+            listOf("서점", "교보", "문구", "다이소", "학원", "학교").any { lowerStore.contains(it) || lowerText.contains(it) } -> "도서/문구"
+            listOf("마트", "이마트", "홈플러스", "다이소", "생활", "세탁").any { lowerStore.contains(it) || lowerText.contains(it) } -> "생활용품"
+            listOf("헬스", "축구", "스포츠", "레저", "골프").any { lowerStore.contains(it) || lowerText.contains(it) } -> "스포츠/레저"
+            else -> "기타"
+        }
+    }
+
+    private fun sendCompletionNotification(store: String, price: Int, category: String) {
         val channelId = "PaymentInputChannel"
         val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
@@ -140,7 +155,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
 
         val notification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("지출 내역 기록됨")
+            .setContentTitle("[$category] 지출 기록됨")
             .setContentText("${store}에서 ${price}원이 기록되었습니다.")
             .setPriority(NotificationCompat.PRIORITY_DEFAULT)
             .setContentIntent(pendingIntent)
