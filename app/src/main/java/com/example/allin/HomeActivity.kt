@@ -8,6 +8,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -21,6 +22,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import java.text.DecimalFormat
+import androidx.activity.OnBackPressedCallback
 
 class HomeActivity : AppCompatActivity() {
 
@@ -42,13 +44,26 @@ class HomeActivity : AppCompatActivity() {
         hideSystemBars()
         initViews()
         setupListeners()
-        observeBudgetData() // 서버 리포트 데이터를 직접 관찰
+        observeBudgetData()
         checkNotificationPermission()
+        setupBackPress()
     }
 
     override fun onResume() {
         super.onResume()
         checkSpecialPermissions()
+        hideSystemBars()
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideSystemBars()
+    }
+
+    private fun hideSystemBars() {
+        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
+        windowInsetsController?.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        windowInsetsController?.hide(WindowInsetsCompat.Type.systemBars())
     }
 
     private fun checkNotificationPermission() {
@@ -62,7 +77,6 @@ class HomeActivity : AppCompatActivity() {
     private fun observeBudgetData() {
         val currentUser = auth.currentUser ?: return
         
-        // Firestore의 리포트 데이터를 실시간 감시 (BudgetSetupActivity와 동기화)
         db.collection("users").document(currentUser.uid)
             .collection("reports")
             .orderBy("start_date", Query.Direction.DESCENDING)
@@ -95,6 +109,7 @@ class HomeActivity : AppCompatActivity() {
             budgetProgress.progress = 0
             tvProgressPercent.text = "0.0%"
             tvWarningMsg.text = "예산을 먼저 설정해 주세요!"
+            ivCharacter.setImageResource(android.R.drawable.ic_menu_help)
         }
     }
 
@@ -103,7 +118,8 @@ class HomeActivity : AppCompatActivity() {
             percent >= 100 -> R.drawable.home100 to "예산을 초과했어요! 지출을 멈추세요."
             percent >= 90 -> R.drawable.home90 to "개큰경고! 예산의 90%를 넘었습니다."
             percent >= 80 -> R.drawable.home80 to "경고! 예산의 80%를 넘었습니다."
-            percent >= 50 -> R.drawable.dog_happy to "예산의 50% 사용. 이대로만 고고띵~"
+            percent >= 50 -> R.drawable.dog_happy to "벌써 절반이나 썼어요! 아껴봅시다."
+            percent >= 20 -> R.drawable.dog_happy to "20% 사용! 이대로만 아껴봐요~!"
             else -> R.drawable.dog_default to "포포가 당신의 소비를 응원해요!"
         }
         tvWarningMsg.text = message
@@ -150,12 +166,6 @@ class HomeActivity : AppCompatActivity() {
             .show()
     }
 
-    private fun hideSystemBars() {
-        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
-        windowInsetsController.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
-    }
-
     private fun initViews() {
         tvWeeklyBudget = findViewById(R.id.tvWeeklyBudget)
         tvUsedAmount = findViewById(R.id.tvUsedAmount)
@@ -173,11 +183,30 @@ class HomeActivity : AppCompatActivity() {
         findViewById<CardView>(R.id.menuAppLock).setOnClickListener {
             startActivity(Intent(this, AppLockActivity::class.java))
         }
+        
+        // Navigation - All using REORDER_TO_FRONT to prevent stacking
         findViewById<LinearLayout>(R.id.navBudget).setOnClickListener {
-            startActivity(Intent(this, BudgetSetupActivity::class.java))
+            val intent = Intent(this, BudgetSetupActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            startActivity(intent)
+            // Slide to Left animation (entering from left)
+            overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
         }
+        
         findViewById<LinearLayout>(R.id.navFakeCart).setOnClickListener {
-            startActivity(Intent(this, FakeCartActivity::class.java))
+            val intent = Intent(this, FakeCartActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            startActivity(intent)
+            // Entering from right
+            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
         }
+    }
+
+    private fun setupBackPress(){
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed(){
+                finishAffinity()
+            }
+        })
     }
 }

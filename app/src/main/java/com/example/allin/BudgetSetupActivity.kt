@@ -7,6 +7,7 @@ import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.*
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
 import androidx.core.view.WindowCompat
@@ -21,6 +22,7 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import java.text.DecimalFormat
 import java.util.*
+
 
 class BudgetSetupActivity : AppCompatActivity() {
 
@@ -54,6 +56,7 @@ class BudgetSetupActivity : AppCompatActivity() {
         initViews()
         setupNavigation()
         observeData()
+        setupBackPress()
     }
 
     private fun hideSystemBars() {
@@ -293,7 +296,7 @@ class BudgetSetupActivity : AppCompatActivity() {
             val intent = Intent(this, HomeActivity::class.java)
             intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
             startActivity(intent)
-            overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
+            overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
         }
         findViewById<LinearLayout>(R.id.navFakeCart).setOnClickListener {
             val intent = Intent(this, FakeCartActivity::class.java)
@@ -301,5 +304,22 @@ class BudgetSetupActivity : AppCompatActivity() {
             startActivity(intent)
             overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
         }
+    }
+
+    private fun setupBackPress() {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                // 홈 화면으로 이동
+                val intent = Intent(this@BudgetSetupActivity, HomeActivity::class.java)
+                intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                startActivity(intent)
+
+                // 왼쪽으로 이동하는 애니메이션 적용
+                overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
+
+                // 현재 액티비티 종료
+                finish()
+            }
+        })
     }
 }

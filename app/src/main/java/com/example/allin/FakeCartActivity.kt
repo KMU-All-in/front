@@ -33,6 +33,7 @@ import android.net.Uri
 import java.text.DecimalFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
+import androidx.activity.OnBackPressedCallback
 
 class FakeCartActivity : AppCompatActivity() {
 
@@ -108,6 +109,7 @@ class FakeCartActivity : AppCompatActivity() {
             Log.e("FakeCartActivity", "Error in onCreate", e)
             finish()
         }
+        setupBackPress()
     }
 
     private fun scheduleExpiryCheck() {
@@ -177,6 +179,14 @@ class FakeCartActivity : AppCompatActivity() {
 
         findViewById<LinearLayout>(R.id.navHome).setOnClickListener {
             startActivity(Intent(this, HomeActivity::class.java).apply { addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT) })
+            overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
+        }
+
+        findViewById<LinearLayout>(R.id.navBudget)?.setOnClickListener {
+            val intent = Intent(this, BudgetSetupActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+            startActivity(intent)
+            overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
         }
     }
 
@@ -421,5 +431,22 @@ class FakeCartActivity : AppCompatActivity() {
         etManualName.setText(foundName)
         etManualPrice.setText(if (foundPrice > 0) foundPrice.toString() else "")
         selectTab(2)
+    }
+
+    private fun setupBackPress() {
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                // 홈 화면으로 이동
+                val intent = Intent(this@FakeCartActivity, HomeActivity::class.java)
+                intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
+                startActivity(intent)
+
+                // 왼쪽으로 이동하는 애니메이션 적용
+                overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
+
+                // 현재 액티비티 종료
+                finish()
+            }
+        })
     }
 }

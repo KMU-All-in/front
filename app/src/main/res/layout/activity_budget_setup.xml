@@ -307,7 +307,7 @@
         </ScrollView>
     </LinearLayout>
 
-    <!-- Bottom Navigation -->
+    <!-- Bottom Navigation: [Budget (Selected), Home, FakeCart] -->
     <LinearLayout
         android:id="@+id/bottomNav"
         android:layout_width="match_parent"
@@ -317,8 +317,9 @@
         android:orientation="horizontal"
         android:elevation="8dp"
         android:gravity="center">
+        <!-- Budget (Selected) -->
         <LinearLayout
-            android:id="@+id/navBudgetSet"
+            android:id="@+id/navBudget"
             android:layout_width="0dp"
             android:layout_height="match_parent"
             android:layout_weight="1"
@@ -327,9 +328,10 @@
             android:focusable="true"
             android:background="#EFF4FF"
             android:orientation="vertical">
-            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@android:drawable/ic_menu_sort_by_size" app:tint="#4F6FFF" android:rotation="45"/>
+            <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@android:drawable/ic_menu_edit" app:tint="#4F6FFF"/>
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="예산 설정" android:textSize="10sp" android:textColor="#4F6FFF" android:textStyle="bold"/>
         </LinearLayout>
+        <!-- Home (Middle) -->
         <LinearLayout
             android:id="@+id/navHome"
             android:layout_width="0dp"
@@ -343,6 +345,7 @@
             <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@android:drawable/ic_menu_today" app:tint="#9E9E9E"/>
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="홈" android:textSize="10sp" android:textColor="#9E9E9E"/>
         </LinearLayout>
+        <!-- Fake Cart -->
         <LinearLayout
             android:id="@+id/navFakeCart"
             android:layout_width="0dp"
@@ -354,11 +357,11 @@
             android:background="?attr/selectableItemBackground"
             android:orientation="vertical">
             <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@android:drawable/ic_menu_view" app:tint="#9E9E9E"/>
-            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="가짜 장바구니" android:textSize="10sp" android:textColor="#9E9E9E"/>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="가짜장바구니" android:textSize="10sp" android:textColor="#9E9E9E"/>
         </LinearLayout>
     </LinearLayout>
 
-    <!-- 입력 카드 팝업 -->
+    <!-- 입력 카드 팝업 (계획 추가 및 지출 추가 겸용) -->
     <View
         android:id="@+id/dimView"
         android:layout_width="match_parent"
