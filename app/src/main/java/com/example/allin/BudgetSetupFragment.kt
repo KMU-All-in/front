@@ -15,6 +15,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import java.text.DecimalFormat
 import java.util.*
+import android.util.Log
 
 class BudgetFragment : Fragment() {
 
@@ -128,9 +129,14 @@ class BudgetFragment : Fragment() {
 
     private fun saveData() {
         val currentUser = auth.currentUser ?: return
-        val amountStr = etInputAmount.text.toString()
+        val amountStr = etInputAmount.text.toString().trim()
         if (amountStr.isEmpty()) return
-        val amount = amountStr.toLong()
+
+        val amount = amountStr.toLongOrNull()
+        if (amount == null) {
+            Toast.makeText(requireContext(), "올바른 숫자만 입력해 주세요.", Toast.LENGTH_SHORT).show()
+            return
+        }
 
         if (tvPopupTitle.text == "이번 주 계획 추가") {
             db.collection("users").document(currentUser.uid)
@@ -141,6 +147,9 @@ class BudgetFragment : Fragment() {
                 .addOnSuccessListener { snapshots ->
                     if (!snapshots.isEmpty) {
                         snapshots.documents[0].reference.update("budget_usage", amount)
+                            .addOnSuccessListener {
+                                savePlanToLocal(amount)
+                            }
                     } else {
                         val newReport = hashMapOf(
                             "budget_usage" to amount,
@@ -150,11 +159,14 @@ class BudgetFragment : Fragment() {
                             "report_type" to "weekly"
                         )
                         db.collection("users").document(currentUser.uid).collection("reports").add(newReport)
+                            .addOnSuccessListener {
+                                savePlanToLocal(amount)
+                            }
                     }
                 }
         } else {
             val storeName = etInputName.text.toString().ifEmpty { "지출" }
-            val category = spCategory.selectedItem.toString()
+            val category = spCategory.selectedItem?.toString() ?: "기타"
 
             val transaction = hashMapOf(
                 "amount" to amount,
@@ -176,14 +188,23 @@ class BudgetFragment : Fragment() {
     private fun updateTotalSpent(uid: String) {
         db.collection("users").document(uid).collection("transactions").get().addOnSuccessListener { snapshots ->
             val total = snapshots.documents.sumOf { it.getLong("amount") ?: 0L }
+
             db.collection("users").document(uid).collection("reports")
                 .orderBy("start_date", Query.Direction.DESCENDING)
                 .limit(1)
                 .get()
                 .addOnSuccessListener { reports ->
+                    // 🌟 [안전빵 추가] 주간 계획 리포트 문서가 진짜로 존재할 때만 업데이트를 실행합니다!
                     if (!reports.isEmpty) {
                         reports.documents[0].reference.update("total_spent", total)
+                        Log.d("BudgetFragment", "총 지출액 업데이트 완료: ${total}원")
+                    } else {
+                        // 계획서가 없다면 튕기지 않고 로그만 찍고 안전하게 넘어갑니다.
+                        Log.d("BudgetFragment", "서버에 주간 계획서가 없어 지출 합산 업데이트를 건너뜁니다.")
                     }
+                }
+                .addOnFailureListener {
+                    Log.e("BudgetFragment", "리포트 조회 실패", it)
                 }
         }
     }
@@ -196,6 +217,14 @@ class BudgetFragment : Fragment() {
         db.collection("users").document(currentUser.uid).collection("transactions").get().addOnSuccessListener {
             for (doc in it) doc.reference.delete()
         }
+
+        val sharedPref = requireContext().getSharedPreferences("AppLockPrefs", Context.MODE_PRIVATE)
+        sharedPref.edit().apply {
+            putBoolean("has_weekly_plan", false)
+            putInt("weekly_budget", 0)
+            commit() // 즉시 물리 반영
+        }
+        Toast.makeText(requireContext(), "계획이 삭제되었습니다.", Toast.LENGTH_SHORT).show()
     }
 
     private fun observeData() {
@@ -252,6 +281,8 @@ class BudgetFragment : Fragment() {
     }
 
     private fun renderCategoryList(transactions: List<com.google.firebase.firestore.DocumentSnapshot>) {
+        val context = context ?: return
+        
         llCategoryList.removeAllViews()
         val dec = DecimalFormat("#,###")
 
@@ -272,5 +303,15 @@ class BudgetFragment : Fragment() {
             }
             llCategoryList.addView(itemView)
         }
+    }
+
+    private fun savePlanToLocal(amount: Long) {
+        val sharedPref = requireContext().getSharedPreferences("AppLockPrefs", Context.MODE_PRIVATE)
+        sharedPref.edit().apply {
+            putBoolean("has_weekly_plan", true)
+            putInt("weekly_budget", amount.toInt())
+            commit() // 즉시 물리 파일에 저장하여 서비스가 바로 읽을 수 있게 함
+        }
+        android.util.Log.d("BudgetFragment", "로컬 주머니(AppLockPrefs)에 주간 계획 true 동기화 완료!")
     }
 }

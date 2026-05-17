@@ -25,6 +25,8 @@ class LockActivity : AppCompatActivity() {
     private var currentPin = ""
     private var correctPin = "1234" // 기본값, Firestore에서 가져옵니다.
 
+    private var targetPackageName: String? = null
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_lock)
@@ -37,6 +39,14 @@ class LockActivity : AppCompatActivity() {
         
         // Firestore에서 실제 PIN 가져오기
         fetchLockPin()
+
+        targetPackageName = intent.getStringExtra("PACKAGE_NAME")
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent) // 새로 들어온 인텐트로 교체
+        targetPackageName = intent.getStringExtra("PACKAGE_NAME") // 패키지명 다시 확실하게 백업!
     }
 
     private fun fetchLockPin() {
@@ -97,6 +107,12 @@ class LockActivity : AppCompatActivity() {
         if (currentPin == correctPin) {
             Toast.makeText(this, "잠금 해제되었습니다.", Toast.LENGTH_SHORT).show()
             resetFailCount()
+
+            val targetPackage = targetPackageName ?: intent.getStringExtra("PACKAGE_NAME")
+
+            android.util.Log.d("LockActivity", "면죄부 발급 패키지명: $targetPackage")
+            com.example.allin.worker.AppMonitorService.unlockedAppPackage = targetPackage
+
             finish()
         } else {
             handleFail()
@@ -149,6 +165,8 @@ class LockActivity : AppCompatActivity() {
     }
 
     override fun onBackPressed() {
+        super.onBackPressed()
+
         val intent = Intent(Intent.ACTION_MAIN)
         intent.addCategory(Intent.CATEGORY_HOME)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK

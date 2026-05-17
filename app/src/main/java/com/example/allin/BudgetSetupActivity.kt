@@ -158,8 +158,14 @@ class BudgetSetupActivity : AppCompatActivity() {
                 .get()
                 .addOnSuccessListener { snapshots ->
                     if (!snapshots.isEmpty) {
+                        // 1. 기존 문서가 있어서 업데이트할 때
                         snapshots.documents[0].reference.update("budget_usage", amount)
+                            .addOnSuccessListener {
+                                // 🌟 [추가] 업데이트 성공 시에도 로컬 주머니 채우기!
+                                savePlanToLocal(amount)
+                            }
                     } else {
+                        // 2. 문서가 없어서 새로 추가할 때
                         val newReport = hashMapOf(
                             "budget_usage" to amount,
                             "total_spent" to 0L,
@@ -168,27 +174,24 @@ class BudgetSetupActivity : AppCompatActivity() {
                             "report_type" to "weekly"
                         )
                         db.collection("users").document(currentUser.uid).collection("reports").add(newReport)
+                            .addOnSuccessListener {
+                                // 🌟 [확인] 새 문서 추가 성공 시에도 로컬 주머니 채우기!
+                                savePlanToLocal(amount)
+                            }
                     }
-                }
-        } else {
-            val storeName = etInputName.text.toString().ifEmpty { "지출" }
-            val category = spCategory.selectedItem.toString()
-            
-            val transaction = hashMapOf(
-                "amount" to amount,
-                "category" to category,
-                "store_name" to storeName,
-                "transaction_date" to Timestamp.now(),
-                "payment_method" to "기타"
-            )
-            
-            db.collection("users").document(currentUser.uid).collection("transactions")
-                .add(transaction)
-                .addOnSuccessListener {
-                    updateTotalSpent(currentUser.uid)
                 }
         }
         hidePopup()
+    }
+
+    private fun savePlanToLocal(amount: Long) {
+        val sharedPref = getSharedPreferences("AppLockPrefs", Context.MODE_PRIVATE)
+        sharedPref.edit().apply {
+            putBoolean("has_weekly_plan", true)
+            putInt("weekly_budget", amount.toInt())
+            commit()
+        }
+        Log.d("BudgetSetup", "로컬 SharedPreferences 주간 계획 동기화 완료: $amount 원")
     }
 
     private fun updateTotalSpent(uid: String) {
@@ -208,17 +211,25 @@ class BudgetSetupActivity : AppCompatActivity() {
 
     private fun deletePlan() {
         val currentUser = auth.currentUser ?: return
-        db.collection("users").document(currentUser.uid).collection("reports").get().addOnSuccessListener { 
+        db.collection("users").document(currentUser.uid).collection("reports").get().addOnSuccessListener {
             for (doc in it) doc.reference.delete()
         }
-        db.collection("users").document(currentUser.uid).collection("transactions").get().addOnSuccessListener { 
+        db.collection("users").document(currentUser.uid).collection("transactions").get().addOnSuccessListener {
             for (doc in it) doc.reference.delete()
+        }
+
+        // 🌟 [추가] 계획을 삭제했으므로 로컬 저장소도 미작성(false) 상태로 초기화합니다.
+        val sharedPref = getSharedPreferences("AppLockPrefs", Context.MODE_PRIVATE)
+        sharedPref.edit().apply {
+            putBoolean("has_weekly_plan", false)
+            putInt("weekly_budget", 0)
+            apply()
         }
     }
 
     private fun observeData() {
         val currentUser = auth.currentUser ?: return
-        
+
         db.collection("users").document(currentUser.uid)
             .collection("reports")
             .orderBy("start_date", Query.Direction.DESCENDING)
@@ -228,6 +239,12 @@ class BudgetSetupActivity : AppCompatActivity() {
                     val doc = snapshots.documents[0]
                     val budget = doc.getLong("budget_usage") ?: 0L
                     val spent = doc.getLong("total_spent") ?: 0L
+
+                    // 🌟 [수정] 서버에서 가져온 예산이 있으면 로컬 SharedPreferences도 업데이트합니다.
+                    if (budget > 0) {
+                        savePlanToLocal(budget)
+                    }
+
                     updateUI(budget, spent)
                 } else {
                     updateUI(0, 0)

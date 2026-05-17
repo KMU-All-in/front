@@ -21,6 +21,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.*
+import com.example.allin.MainActivity
 
 class AppMonitorService : Service() {
 
@@ -30,25 +31,36 @@ class AppMonitorService : Service() {
     private var lastApp: String? = null
     private val serviceScope = CoroutineScope(Dispatchers.IO)
 
+    companion object {
+        var unlockedAppPackage: String? = null
+        var lastLockTime: Long = 0L
+    }
+
     private val monitorRunnable = object : Runnable {
         override fun run() {
             if (!isRunning) return
-            
+
             val currentApp = getForegroundApp()
-            
+            val currentTime = System.currentTimeMillis()
+
             if (currentApp != null && lockedApps.contains(currentApp)) {
-                if (currentApp != lastApp) {
-                    Log.d("AppMonitorService", "쇼핑 앱 감지: $currentApp")
+                if (currentApp != unlockedAppPackage && (currentTime - lastLockTime > 5000)) {
+                    Log.d("AppMonitorService", "쇼핑 앱 확실하게 차단 실행 (중복 원천 차단): $currentApp")
+
+                    lastLockTime = currentTime
+                    unlockedAppPackage = null
+
                     checkBudgetAndPlan()
-                    
-                    // (옵션) 바로 잠금화면을 띄우고 싶다면 아래 주석 해제
-                    /*
-                    val intent = Intent(this@AppMonitorService, LockActivity::class.java).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+
+                    val lockIntent = Intent(applicationContext, LockActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
                         putExtra("PACKAGE_NAME", currentApp)
                     }
-                    startActivity(intent)
-                    */
+                    startActivity(lockIntent)
+                }
+            } else {
+                if (currentApp != null && !lockedApps.contains(currentApp)) {
+                    unlockedAppPackage = null
                 }
             }
             lastApp = currentApp
@@ -56,52 +68,64 @@ class AppMonitorService : Service() {
         }
     }
 
-    // 예산 및 계획 체크 로직 (시나리오 3-1, 3-2-3)
+    // 예산 및 계획 체크 로직
     private fun checkBudgetAndPlan() {
-        serviceScope.launch {
-            val prefs = getSharedPreferences("AllInPrefs", Context.MODE_PRIVATE)
-            val weeklyBudget = prefs.getInt("weekly_budget", 0)
-            val hasPlan = prefs.getBoolean("has_weekly_plan", false)
+        val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return
+        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
 
-            // 1. 계획이 없으면 작성 페이지로 강제 이동 (3-2-3)
-            if (!hasPlan) {
-                val intent = Intent(this@AppMonitorService, BudgetSetupActivity::class.java).apply {
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        db.collection("users").document(currentUser.uid).collection("reports")
+            .orderBy("start_date", com.google.firebase.firestore.Query.Direction.DESCENDING)
+            .limit(1)
+            .get()
+            .addOnSuccessListener { snapshots ->
+
+                if (snapshots.isEmpty || (snapshots.documents[0].getLong("budget_usage") ?: 0L) <= 0L) {
+
+                    sendNotification("계획 미작성", "이번 주 주간 계획을 먼저 작성해 주세요!")
+
+                    // 강제로 예산 설정 페이지로 보내는 어쩌구저쩌구 거시기 그거입니다. 강제로 보내지는게 기분 드릅다 싶으면 주석처리해도 됩니다.
+                    val intent = Intent(this@AppMonitorService, MainActivity::class.java).apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+                        // 만약 MainActivity가 켜질 때 바로 예산 탭을 보여주고 싶다면 아래처럼 플래그를 넘길 수도 있습니다.
+                        putExtra("GO_TO_BUDGET", true)
+                    }
+                    startActivity(intent)
+
+                    Log.d("AppMonitorService", "계획 미작성 확인되어 메인 화면으로 강제 이동 완료!")
+                    // 여기까지 주석처리하면 됩니다 밑에 리턴코드 빼고
+
+                    return@addOnSuccessListener
                 }
-                startActivity(intent)
-                sendNotification("계획 미작성", "이번 주 주간 계획을 먼저 작성해 주세요!")
-                return@launch
-            }
 
-            // 2. 이번 주 지출 합계 계산 (3-1)
-            val dao = AppDatabase.getDatabase(applicationContext).paymentDao()
-            val payments = dao.getAllPayments().first()
-            
-            val calendar = Calendar.getInstance()
-            calendar.set(Calendar.DAY_OF_WEEK, calendar.firstDayOfWeek)
-            val startOfWeek = calendar.timeInMillis
-            
-            val thisWeekTotal = payments.filter { it.date >= startOfWeek }.sumOf { it.amount }
+                val doc = snapshots.documents[0]
+                val budget = doc.getLong("budget_usage") ?: 0L
+                val thisWeekTotal = doc.getLong("total_spent") ?: 0L
 
-            if (weeklyBudget > 0) {
-                val percent = (thisWeekTotal.toDouble() / weeklyBudget * 100).toInt()
-                if (percent >= 50) {
-                    sendNotification("예산 경고", "이번 주 예산의 $percent%를 사용했습니다! 신중하게 쇼핑하세요.")
+                // 예산 사용량 경고 체크
+                if (budget > 0L) {
+                    val percent = ((thisWeekTotal.toDouble() / budget.toDouble()) * 100).toInt()
+                    if (percent >= 50) {
+                        sendNotification("예산 경고", "이번 주 예산의 ${percent}%를 사용했습니다! 신중하게 쇼핑하세요.")
+                    }
                 }
+
+                Log.d("AppMonitorService", "주간 계획이 확인되어 정상 통과합니다. 예산: $budget")
             }
-        }
     }
 
     private fun sendNotification(title: String, message: String) {
         val channelId = "BudgetWarningChannel"
         val manager = getSystemService(NotificationManager::class.java)
-        
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(channelId, "예산 경고", NotificationManager.IMPORTANCE_HIGH)
             manager.createNotificationChannel(channel)
         }
 
-        val intent = Intent(this, BudgetSetupActivity::class.java)
+        val intent = Intent(this@AppMonitorService, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            putExtra("TARGET_FRAGMENT", "BUDGET")
+        }
         val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
 
         val notification = NotificationCompat.Builder(this, channelId)

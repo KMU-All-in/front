@@ -19,7 +19,7 @@ import java.util.*
 class NotificationWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        val prefs = applicationContext.getSharedPreferences("AllInPrefs", Context.MODE_PRIVATE)
+        val prefs = applicationContext.getSharedPreferences("AppLockPrefs", Context.MODE_PRIVATE)
         val hasPlan = prefs.getBoolean("has_weekly_plan", false)
         
         val calendar = Calendar.getInstance()

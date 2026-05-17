@@ -63,6 +63,8 @@ class LockedAppRepository(private val lockedAppDao: LockedAppDao) {
             .addOnSuccessListener { snapshot ->
                 val apps = snapshot.get("locked_apps") as? List<String> ?: emptyList()
                 scope.launch {
+
+                    lockedAppDao.deleteAll()
                     apps.forEach { pkg ->
                         val appName = try {
                             val info = packageManager.getApplicationInfo(pkg, 0)
