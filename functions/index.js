@@ -76,12 +76,12 @@ function classifyCategory(storeName, fullText = "") {
   const lowerText = String(fullText || "").toLowerCase();
   const check = (keywords) => keywords.some(kw => lowerStore.includes(kw) || lowerText.includes(kw));
 
-  if (check(["마트", "편의점", "식당", "카페", "커피", "베이커리", "음식점", "배달", "치킨", "피자", "gs25", "cu", "세븐일레븐", "이마트24"])) return "식품/음료";
+  if (check(["gs25", "cu", "세븐일레븐", "이마트24", "카페", "커피", "식당", "음식점", "배달", "치킨", "피자"])) return "식품/음료";
   if (check(["백화점", "쇼핑", "몰", "의류", "패션", "무신사", "지그재그"])) return "패션/의류";
   if (check(["올리브영", "화장품", "뷰티", "헤어", "미용실"])) return "뷰티/화장품";
   if (check(["하이마트", "전자", "애플", "삼성", "컴퓨터"])) return "전자기기";
   if (check(["서점", "교보", "문구", "다이소", "학원", "학교"])) return "도서/문구";
-  if (check(["마트", "이마트", "홈플러스", "다이소", "생활", "세탁"])) return "생활용품";
+  if (check(["이마트", "홈플러스", "롯데마트", "마트", "다이소", "생활", "세탁"])) return "생활용품";
   if (check(["헬스", "축구", "스포츠", "레저", "골프"])) return "스포츠/레저";
   return "기타";
 }
@@ -215,70 +215,18 @@ function filterByMonth(spendingData, targetMonth) {
 
   return spendingData.filter((item) => {
     if (!item.date) return false;
-    return String(item.date).startsWith(targetMonth);
-  });
-}
 
-function calculateTotalSpent(spendingData) {
-  return spendingData.reduce((sum, item) => {
-    const amount = Number(item.amount) || 0;
-    return sum + amount;
-  }, 0);
-}
-
-function calculateCategorySpent(spendingData) {
-  const categoryMap = {};
-
-  spendingData.forEach((item) => {
-    const category = item.category || "기타";
-    const amount = Number(item.amount) || 0;
-
-    if (!categoryMap[category]) {
-      categoryMap[category] = 0;
+    let itemMonth = "";
+    const timestamp = Number(item.date);
+    // ms 타임스탬프 처리 (앱 데이터 형식)
+    if (!isNaN(timestamp) && timestamp > 1000000000) {
+      const d = new Date(timestamp);
+      itemMonth = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+    } else {
+      itemMonth = String(item.date).substring(0, 7); // "YYYY-MM"
     }
-
-    categoryMap[category] += amount;
+    return itemMonth === targetMonth;
   });
-
-  return categoryMap;
-}
-
-function createCategoryAnalysis(categorySpent, totalSpent, categoryBudgets) {
-  return Object.entries(categorySpent).map(([category, spent]) => {
-    const budget = categoryBudgets?.[category] || 0;
-
-    const ratio = totalSpent > 0
-      ? roundToTwo((spent / totalSpent) * 100)
-      : 0;
-
-    const usageRate = budget > 0
-      ? roundToTwo((spent / budget) * 100)
-      : null;
-
-    return {
-      category: category,
-      spent: spent,
-      ratio: ratio,
-      budget: budget,
-      usageRate: usageRate,
-      isOverBudget: budget > 0 ? spent > budget : false
-    };
-  });
-}
-
-function analyzeSpendingPattern(categoryAnalysis) {
-  if (!categoryAnalysis || categoryAnalysis.length === 0) {
-    return "분석할 소비 데이터가 없습니다.";
-  }
-
-  const sorted = [...categoryAnalysis].sort((a, b) => b.spent - a.spent);
-  const topCategory = sorted[0];
-
-  if (topCategory.ratio >= 50) {
-    return `이번 달 소비는 ${topCategory.category} 카테고리에 집중되어 있습니다.`;
-  }
-
-  return `이번 달 소비는 ${topCategory.category} 카테고리의 비중이 가장 높습니다.`;
 }
 
 function analyzeBudgetData(spendingData, monthlyBudget, categoryBudgets, targetMonth) {
@@ -287,62 +235,98 @@ function analyzeBudgetData(spendingData, monthlyBudget, categoryBudgets, targetM
   }
 
   const filteredData = filterByMonth(spendingData, targetMonth);
-  const totalSpent = calculateTotalSpent(filteredData);
-  const categorySpent = calculateCategorySpent(filteredData);
-  const categoryAnalysis = createCategoryAnalysis(
-    categorySpent,
-    totalSpent,
-    categoryBudgets || {}
-  );
+  const totalSpent = filteredData.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 
-  const budgetUsageRate = monthlyBudget > 0
-    ? roundToTwo((totalSpent / monthlyBudget) * 100)
-    : null;
+  // 1. 카테고리별 분석
+  const categoryMap = {};
+  filteredData.forEach((item) => {
+    const cat = item.category || "기타";
+    categoryMap[cat] = (categoryMap[cat] || 0) + (Number(item.amount) || 0);
+  });
 
-  const remainingBudget = monthlyBudget > 0
-    ? monthlyBudget - totalSpent
-    : null;
+  const categoryAnalysis = Object.entries(categoryMap).map(([category, spent]) => {
+    const budget = categoryBudgets?.[category] || 0;
+    return {
+      category, spent,
+      ratio: totalSpent > 0 ? roundToTwo((spent / totalSpent) * 100) : 0,
+      budget,
+      usageRate: budget > 0 ? roundToTwo((spent / budget) * 100) : null,
+      isOverBudget: budget > 0 ? spent > budget : false
+    };
+  }).sort((a, b) => b.spent - a.spent);
+
+  // 2. 상위 가맹점 분석 (누적 지출액 기준)
+  const merchantMap = {};
+  filteredData.forEach((item) => {
+    const name = item.storeName || "알 수 없음";
+    merchantMap[name] = (merchantMap[name] || 0) + (Number(item.amount) || 0);
+  });
+  const topMerchants = Object.entries(merchantMap)
+    .map(([name, spent]) => ({ name, spent }))
+    .sort((a, b) => b.spent - a.spent)
+    .slice(0, 5);
+
+  // 3. 예산 상태 및 요약 메시지
+  const usageRate = monthlyBudget > 0 ? roundToTwo((totalSpent / monthlyBudget) * 100) : null;
+  const remainingBudget = monthlyBudget > 0 ? monthlyBudget - totalSpent : null;
+
+  let status = "정상";
+  let reportMessage = "이번 달도 알뜰하게 소비하고 계시네요!";
+
+  if (usageRate >= 100) {
+    status = "초과";
+    reportMessage = "예산을 초과했습니다! 지출 내역을 점검해보세요.";
+  } else if (usageRate >= 80) {
+    status = "경고";
+    reportMessage = "예산의 80%를 넘었습니다. 조금만 더 아껴볼까요?";
+  }
+
+  if (categoryAnalysis.length > 0) {
+    reportMessage += ` 특히 '${categoryAnalysis[0].category}' 비중이 가장 높습니다.`;
+  }
 
   return {
-    targetMonth: targetMonth || "all",
-    totalSpent: totalSpent,
-    monthlyBudget: monthlyBudget || 0,
-    budgetUsageRate: budgetUsageRate,
-    isOverBudget: monthlyBudget > 0 ? totalSpent > monthlyBudget : false,
-    remainingBudget: remainingBudget,
-    categoryAnalysis: categoryAnalysis,
-    patternSummary: analyzeSpendingPattern(categoryAnalysis)
+    targetMonth: targetMonth || "전체",
+    summary: {
+      totalSpent,
+      monthlyBudget: monthlyBudget || 0,
+      usageRate,
+      remainingBudget,
+      status,
+      isOverBudget: monthlyBudget > 0 && totalSpent > monthlyBudget
+    },
+    stats: {
+      transactionCount: filteredData.length,
+      dailyAverage: roundToTwo(totalSpent / 30),
+      topMerchants: topMerchants,
+      mostExpensiveItem: [...filteredData].sort((a, b) => (Number(b.amount) || 0) - (Number(a.amount) || 0))[0] || null
+    },
+    categoryAnalysis,
+    reportMessage
   };
 }
 
 exports.analyzeBudget = onCall((request) => {
-  const data = request.data;
+  const { spendingData, monthlyBudget, categoryBudgets, targetMonth } = request.data || {};
 
-  if (!data || !data.spendingData) {
-    throw new HttpsError(
-      "invalid-argument",
-      "spendingData가 필요합니다."
-    );
+  if (!spendingData) {
+    throw new HttpsError("invalid-argument", "spendingData가 필요합니다.");
   }
 
   try {
     const result = analyzeBudgetData(
-      data.spendingData,
-      Number(data.monthlyBudget) || 0,
-      data.categoryBudgets || {},
-      data.targetMonth
+      spendingData,
+      Number(monthlyBudget) || 0,
+      categoryBudgets || {},
+      targetMonth
     );
 
     return {
       success: true,
-      message: "예산 분석 완료",
+      message: "소비 리포트 생성 완료",
       result: result
     };
   } catch (error) {
-    throw new HttpsError(
-      "internal",
-      "예산 분석 중 오류가 발생했습니다.",
-      error.message
-    );
+    throw new HttpsError("internal", "예산 분석 중 오류가 발생했습니다.", error.message);
   }
 });
