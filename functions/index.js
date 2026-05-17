@@ -19,172 +19,117 @@ function getByFieldName(item, candidates) {
 
 function scoreDate(value) {
   const text = String(value).trim();
-
   if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(text)) return 95;
   if (/^\d{4}\.\d{1,2}\.\d{1,2}$/.test(text)) return 95;
   if (/^\d{4}\/\d{1,2}\/\d{1,2}$/.test(text)) return 95;
   if (/^\d{8}$/.test(text)) return 85;
   if (/^\d{1,2}월\s?\d{1,2}일$/.test(text)) return 70;
   if (/^\d{1,2}\/\d{1,2}$/.test(text)) return 60;
-
   return 0;
 }
 
 function scoreAmount(value) {
   const text = String(value).trim();
-
-  // 날짜처럼 보이면 금액 후보에서 제외
   if (scoreDate(text) >= 60) return 0;
-
   if (/^[₩￦]\s?\d{1,3}(,\d{3})+$/.test(text)) return 95;
   if (/^\d{1,3}(,\d{3})+원$/.test(text)) return 95;
   if (/^\d+원$/.test(text)) return 90;
   if (/^\d{1,3}(,\d{3})+$/.test(text)) return 85;
-
   const cleaned = text.replace(/[^0-9-]/g, "");
-
   if (/^-?\d+$/.test(cleaned)) {
     const amount = Math.abs(Number(cleaned));
-
     if (amount < 100) return 10;
     if (amount >= 100 && amount < 10000000) return 70;
   }
-
   return 0;
 }
 
 function scoreStoreName(value) {
   const text = String(value).trim();
-
-  if (!text) return 0;
-  if (scoreDate(text) > 0) return 0;
-  if (scoreAmount(text) >= 70) return 0;
-  if (/^\d+$/.test(text)) return 0;
-  if (text.length > 40) return 20;
-
+  if (!text || scoreDate(text) > 0 || scoreAmount(text) >= 70 || /^\d+$/.test(text)) return 0;
   const lower = text.toLowerCase();
-
-  const knownStores = [
-    "gs25", "cu", "세븐일레븐", "이마트24",
-    "스타벅스", "이디야", "메가커피", "투썸",
-    "쿠팡", "무신사", "네이버쇼핑", "배달의민족", "요기요"
-  ];
-
-  if (knownStores.some((store) => lower.includes(store.toLowerCase()))) {
-    return 95;
-  }
-
-  // 한글, 영어가 섞인 짧은 문자열이면 가맹점명 가능성 있음
-  if (/^[가-힣a-zA-Z0-9\s()._-]+$/.test(text) && text.length <= 25) {
-    return 75;
-  }
-
+  const knownStores = ["gs25", "cu", "세븐일레븐", "이마트24", "스타벅스", "이디야", "메가커피", "투썸"];
+  if (knownStores.some((store) => lower.includes(store))) return 95;
+  if (/^[가-힣a-zA-Z0-9\s()._-]+$/.test(text) && text.length <= 25) return 75;
   return 40;
 }
 
 function normalizeDate(value) {
   const text = String(value).trim();
-
   if (/^\d{4}[./-]\d{1,2}[./-]\d{1,2}$/.test(text)) {
     const parts = text.split(/[./-]/);
     return `${parts[0]}-${parts[1].padStart(2, "0")}-${parts[2].padStart(2, "0")}`;
   }
-
-  if (/^\d{8}$/.test(text)) {
-    return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`;
-  }
-
+  if (/^\d{8}$/.test(text)) return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`;
   return text;
 }
 
 function normalizeAmount(value) {
+  if (typeof value === "number") return value;
   const text = String(value).trim();
   const cleaned = text.replace(/[^0-9-]/g, "");
   return Number(cleaned);
 }
 
-function classifyCategory(storeName) {
-  const name = String(storeName || "").toLowerCase();
+function classifyCategory(storeName, fullText = "") {
+  const lowerStore = String(storeName || "").toLowerCase();
+  const lowerText = String(fullText || "").toLowerCase();
+  const check = (keywords) => keywords.some(kw => lowerStore.includes(kw) || lowerText.includes(kw));
 
-  if (name.includes("gs25") || name.includes("cu") || name.includes("세븐일레븐") || name.includes("이마트24")) {
-    return "편의점";
-  }
-
-  if (name.includes("스타벅스") || name.includes("이디야") || name.includes("메가커피") || name.includes("투썸")) {
-    return "카페";
-  }
-
-  if (name.includes("쿠팡") || name.includes("무신사") || name.includes("네이버쇼핑")) {
-    return "쇼핑";
-  }
-
-  if (name.includes("버스") || name.includes("지하철") || name.includes("택시")) {
-    return "교통";
-  }
-
+  if (check(["마트", "편의점", "식당", "카페", "커피", "베이커리", "음식점", "배달", "치킨", "피자", "gs25", "cu", "세븐일레븐", "이마트24"])) return "식품/음료";
+  if (check(["백화점", "쇼핑", "몰", "의류", "패션", "무신사", "지그재그"])) return "패션/의류";
+  if (check(["올리브영", "화장품", "뷰티", "헤어", "미용실"])) return "뷰티/화장품";
+  if (check(["하이마트", "전자", "애플", "삼성", "컴퓨터"])) return "전자기기";
+  if (check(["서점", "교보", "문구", "다이소", "학원", "학교"])) return "도서/문구";
+  if (check(["마트", "이마트", "홈플러스", "다이소", "생활", "세탁"])) return "생활용품";
+  if (check(["헬스", "축구", "스포츠", "레저", "골프"])) return "스포츠/레저";
   return "기타";
 }
 
-function pickBestCandidate(values, scoreFunction) {
-  let bestValue = null;
-  let bestScore = 0;
+function extractAmountFromText(content) {
+  const wonMatch = content.match(/([\d,]+)\s*원/);
+  if (wonMatch) return parseInt(wonMatch[1].replace(/,/g, ""), 10) || 0;
+  const numMatches = content.match(/[\d,]{3,}/g) || [];
+  if (numMatches.length === 0) return 0;
+  const withComma = numMatches.find(n => n.includes(","));
+  if (withComma) return parseInt(withComma.replace(/,/g, ""), 10) || 0;
+  if (numMatches.length > 1) {
+    const notFourDigits = numMatches.filter(n => n.length !== 4);
+    if (notFourDigits.length > 0) return parseInt(notFourDigits[notFourDigits.length - 1], 10) || 0;
+  }
+  return parseInt(numMatches[numMatches.length - 1], 10) || 0;
+}
 
+function pickBestCandidate(values, scoreFunction) {
+  let bestValue = null, bestScore = 0;
   for (const value of values) {
     const score = scoreFunction(value);
-
-    if (score > bestScore) {
-      bestScore = score;
-      bestValue = value;
-    }
+    if (score > bestScore) { bestScore = score; bestValue = value; }
   }
-
-  return {
-    value: bestValue,
-    score: bestScore
-  };
+  return { value: bestValue, score: bestScore };
 }
 
 function inferPaymentItem(item) {
-  const values = Object.values(item).filter(
-    (value) => value !== null && value !== undefined && value !== ""
-  );
-
-  // 1차: 필드명 기반
+  const values = Object.values(item).filter(v => v !== null && v !== undefined && v !== "");
   let rawDate = getByFieldName(item, fieldMap.date);
   let rawAmount = getByFieldName(item, fieldMap.amount);
   let rawStoreName = getByFieldName(item, fieldMap.storeName);
   let rawCategory = getByFieldName(item, fieldMap.category);
   let rawPaymentMethod = getByFieldName(item, fieldMap.paymentMethod);
 
-  let confidence = {
-    date: rawDate ? 100 : 0,
-    amount: rawAmount ? 100 : 0,
-    storeName: rawStoreName ? 100 : 0
-  };
+  let confidence = { date: rawDate ? 100 : 0, amount: rawAmount ? 100 : 0, storeName: rawStoreName ? 100 : 0 };
 
-  // 2차: 값 형태 기반 추론
   if (!rawDate) {
-    const candidate = pickBestCandidate(values, scoreDate);
-    if (candidate.score >= 60) {
-      rawDate = candidate.value;
-      confidence.date = candidate.score;
-    }
+    const c = pickBestCandidate(values, scoreDate);
+    if (c.score >= 60) { rawDate = c.value; confidence.date = c.score; }
   }
-
   if (!rawAmount) {
-    const candidate = pickBestCandidate(values, scoreAmount);
-    if (candidate.score >= 70) {
-      rawAmount = candidate.value;
-      confidence.amount = candidate.score;
-    }
+    const c = pickBestCandidate(values, scoreAmount);
+    if (c.score >= 70) { rawAmount = c.value; confidence.amount = c.score; }
   }
-
   if (!rawStoreName) {
-    const candidate = pickBestCandidate(values, scoreStoreName);
-    if (candidate.score >= 60) {
-      rawStoreName = candidate.value;
-      confidence.storeName = candidate.score;
-    }
+    const c = pickBestCandidate(values, scoreStoreName);
+    if (c.score >= 60) { rawStoreName = c.value; confidence.storeName = c.score; }
   }
 
   const parsed = {
@@ -196,56 +141,65 @@ function inferPaymentItem(item) {
     confidence: confidence
   };
 
-  // 3차: 필수값 검증
   const errors = [];
-
   if (!parsed.date) errors.push("날짜를 찾을 수 없습니다.");
   if (!parsed.amount) errors.push("금액을 찾을 수 없습니다.");
   if (!parsed.storeName) errors.push("가맹점명을 찾을 수 없습니다.");
-
   parsed.isValid = errors.length === 0;
   parsed.errors = errors;
-
   return parsed;
-}
-
-function parsePaymentData(paymentData) {
-  if (!Array.isArray(paymentData)) {
-    throw new Error("paymentData는 배열 형태여야 합니다.");
-  }
-
-  const parsedList = paymentData.map((item) => inferPaymentItem(item));
-
-  return {
-    validData: parsedList.filter((item) => item.isValid),
-    invalidData: parsedList.filter((item) => !item.isValid)
-  };
 }
 
 exports.parsePaymentData = onCall((request) => {
   const data = request.data;
-
-  if (!data || !data.paymentData) {
-    throw new HttpsError("invalid-argument", "paymentData가 필요합니다.");
-  }
-
+  if (!data || !data.paymentData) throw new HttpsError("invalid-argument", "paymentData 필요");
   try {
-    const result = parsePaymentData(data.paymentData);
-
+    const parsedList = data.paymentData.map(item => inferPaymentItem(item));
     return {
       success: true,
-      message: "결제 데이터 파싱 완료",
-      validCount: result.validData.length,
-      invalidCount: result.invalidData.length,
-      result: result
+      result: {
+        validData: parsedList.filter(i => i.isValid),
+        invalidData: parsedList.filter(i => !i.isValid)
+      }
     };
   } catch (error) {
-    throw new HttpsError(
-      "internal",
-      "결제 데이터 파싱 중 오류가 발생했습니다.",
-      error.message
-    );
+    throw new HttpsError("internal", error.message);
   }
+});
+
+exports.parseNotification = onCall((request) => {
+  const { title = "", text = "" } = request.data || {};
+  const fullText = `${title} ${text}`.trim();
+  if (!fullText) throw new HttpsError("invalid-argument", "내용이 없습니다.");
+
+  const excludeKeywords = ["입금", "환불", "취소", "입금완료", "(광고)", "광고"];
+  if (excludeKeywords.some(kw => fullText.includes(kw))) return { success: false, reason: "excluded" };
+
+  const payKeywords = ["승인", "결제", "일시불", "출금", "카드승인", "자동이체"];
+  if (!payKeywords.some(kw => fullText.includes(kw))) return { success: false, reason: "not_payment" };
+
+  const amount = extractAmountFromText(fullText);
+  if (amount <= 0) return { success: false, reason: "amount_not_found" };
+
+  let storeName = (title.length >= 2 && title.length <= 12 && !title.includes("메시지"))
+    ? title
+    : (text.split(/\s+/).slice(0, 2).join(" ") || "알 수 없음");
+
+  return {
+    success: true,
+    result: {
+      amount,
+      storeName,
+      category: classifyCategory(storeName, fullText),
+      date: new Date().getTime(),
+      originalText: fullText
+    }
+  };
+});
+
+exports.classifyCategory = onCall((request) => {
+  const { storeName = "", fullText = "" } = request.data || {};
+  return { success: true, category: classifyCategory(storeName, fullText) };
 });
 
 // -----------------------------
