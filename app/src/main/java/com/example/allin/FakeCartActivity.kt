@@ -1,39 +1,43 @@
 package com.example.allin
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.content.res.ColorStateList
 import android.graphics.Color
+import android.net.Uri
+import android.os.Build
 import android.os.Bundle
 import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.widget.*
+import androidx.activity.OnBackPressedCallback
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import androidx.cardview.widget.CardView
+import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.work.*
+import com.bumptech.glide.Glide
 import com.example.allin.data.FakeCartRepository
 import com.example.allin.data.FakeProduct
 import com.example.allin.worker.FakeCartWorker
 import com.google.firebase.auth.FirebaseAuth
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.jsoup.Jsoup
-import com.bumptech.glide.Glide
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.text.TextRecognition
-import com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions
-import androidx.activity.result.contract.ActivityResultContracts
-import android.net.Uri
 import java.text.DecimalFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
-import androidx.activity.OnBackPressedCallback
 
 class FakeCartActivity : AppCompatActivity() {
 
@@ -69,8 +73,14 @@ class FakeCartActivity : AppCompatActivity() {
     private lateinit var repository: FakeCartRepository
     private var currentTabIndex = 0
     private var selectedImageUri: Uri? = null
-    
     private var editingProduct: FakeProduct? = null
+    
+    // 만료 팝업을 한 번만 띄우기 위한 플래그
+    private var isExpiredCheckDone = false
+
+    private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+        if (isGranted) scheduleExpiryCheck()
+    }
 
     private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let {
@@ -91,9 +101,6 @@ class FakeCartActivity : AppCompatActivity() {
 
         if (FirebaseAuth.getInstance().currentUser == null) {
             Toast.makeText(this, "로그인이 필요한 서비스입니다.", Toast.LENGTH_SHORT).show()
-            val intent = Intent(this, AllInActivity::class.java)
-            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-            startActivity(intent)
             finish()
             return
         }
@@ -103,7 +110,8 @@ class FakeCartActivity : AppCompatActivity() {
             if (!initViews()) return
             setupListeners()
             observeCartItems()
-            scheduleExpiryCheck()
+            checkNotificationPermission()
+            handleIntent(intent)
             dimView.post { selectTab(0) }
         } catch (e: Exception) {
             Log.e("FakeCartActivity", "Error in onCreate", e)
@@ -112,11 +120,38 @@ class FakeCartActivity : AppCompatActivity() {
         setupBackPress()
     }
 
+    private fun handleIntent(intent: Intent?) {
+        if (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") {
+            val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
+            if (sharedText != null) {
+                etUrlInput.setText(sharedText)
+                selectTab(0)
+                showAddProductPopup()
+            }
+        }
+    }
+
+    private fun checkNotificationPermission() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) {
+                scheduleExpiryCheck()
+            } else {
+                requestPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        } else {
+            scheduleExpiryCheck()
+        }
+    }
+
     private fun scheduleExpiryCheck() {
-        val workRequest = PeriodicWorkRequestBuilder<FakeCartWorker>(1, TimeUnit.DAYS)
+        val workRequest = PeriodicWorkRequestBuilder<FakeCartWorker>(1, TimeUnit.HOURS)
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .build()
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork("FakeCartExpiryWork", ExistingPeriodicWorkPolicy.KEEP, workRequest)
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "FakeCartExpiryWork", 
+            ExistingPeriodicWorkPolicy.UPDATE, 
+            workRequest
+        )
     }
 
     private fun hideSystemBars() {
@@ -181,13 +216,6 @@ class FakeCartActivity : AppCompatActivity() {
             startActivity(Intent(this, HomeActivity::class.java).apply { addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT) })
             overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
         }
-
-        findViewById<LinearLayout>(R.id.navBudget)?.setOnClickListener {
-            val intent = Intent(this, BudgetSetupActivity::class.java)
-            intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-            startActivity(intent)
-            overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
-        }
     }
 
     private fun selectTab(index: Int) {
@@ -212,8 +240,36 @@ class FakeCartActivity : AppCompatActivity() {
     private fun observeCartItems() {
         lifecycleScope.launch {
             repository.allProducts.collect { products ->
+                // [추가] 만료 상품 체크 로직
+                if (!isExpiredCheckDone) {
+                    checkAndShowExpiredDialog(products)
+                    isExpiredCheckDone = true
+                }
                 renderCartItems(products)
             }
+        }
+    }
+
+    // 만료된 상품이 있는지 확인하고 팝업 띄우기
+    private fun checkAndShowExpiredDialog(products: List<FakeProduct>) {
+        val now = System.currentTimeMillis()
+        val expiredProducts = products.filter { 
+            val expiryTime = it.addedTime + TimeUnit.DAYS.toMillis(it.expiryDays.toLong())
+            now >= expiryTime
+        }
+
+        if (expiredProducts.isNotEmpty()) {
+            AlertDialog.Builder(this)
+                .setTitle("숙고 기간 만료 안내")
+                .setMessage("숙고 기간이 지난 상품이 ${expiredProducts.size}건 있습니다. 삭제하시겠습니까?")
+                .setPositiveButton("삭제") { _, _ ->
+                    lifecycleScope.launch {
+                        expiredProducts.forEach { repository.delete(it) }
+                        Toast.makeText(this@FakeCartActivity, "만료된 상품이 삭제되었습니다.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+                .setNegativeButton("유지", null)
+                .show()
         }
     }
 
@@ -224,14 +280,11 @@ class FakeCartActivity : AppCompatActivity() {
 
         for (product in products) {
             val expiryTime = product.addedTime + TimeUnit.DAYS.toMillis(product.expiryDays.toLong())
-            if (now >= expiryTime) {
-                lifecycleScope.launch { repository.delete(product) }
-                continue
-            }
+            
+            // [수정] 자동 삭제 로직을 제거했습니다. (사용자가 팝업에서 선택함)
 
             val itemView = LayoutInflater.from(this).inflate(R.layout.item_cart_product, cartItemsContainer, false)
-            val diffInMillis = expiryTime - now
-            val diffInDays = TimeUnit.MILLISECONDS.toDays(diffInMillis)
+            val diffInDays = TimeUnit.MILLISECONDS.toDays(expiryTime - now)
             val dDayText = if (diffInDays <= 0L) "D-Day" else "D-$diffInDays"
             
             itemView.findViewById<TextView>(R.id.tvRemainingDays)?.text = dDayText
@@ -240,7 +293,7 @@ class FakeCartActivity : AppCompatActivity() {
             
             val ivProduct = itemView.findViewById<ImageView>(R.id.ivProduct)
             if (product.imageUrl.isNotEmpty()) {
-                Glide.with(this).load(product.imageUrl).placeholder(android.R.drawable.ic_menu_gallery).error(android.R.drawable.ic_menu_report_image).into(ivProduct)
+                Glide.with(this).load(product.imageUrl).placeholder(android.R.drawable.ic_menu_gallery).into(ivProduct)
             }
             
             val reasonsText = if (product.reasons.isEmpty()) "아직 작성된 이유가 없습니다."
@@ -273,26 +326,19 @@ class FakeCartActivity : AppCompatActivity() {
         etEditPrice.setText(product.price.toString())
         if (product.imageUrl.isNotEmpty()) {
             Glide.with(this).load(product.imageUrl).into(ivEditPhotoPreview)
-        } else {
-            ivEditPhotoPreview.setImageResource(android.R.drawable.ic_menu_camera)
         }
     }
 
     private fun saveEditedProduct() {
         val product = editingProduct ?: return
-        val newName = etEditName.text.toString().trim()
-        val newPrice = etEditPrice.text.toString().toIntOrNull() ?: 0
         lifecycleScope.launch {
             val updatedProduct = product.copy(
-                name = newName.ifEmpty { product.name },
-                price = newPrice,
-                imageUrl = if (selectedImageUri != null) selectedImageUri.toString() else product.imageUrl
+                name = etEditName.text.toString().trim().ifEmpty { product.name },
+                price = etEditPrice.text.toString().toIntOrNull() ?: product.price,
+                imageUrl = selectedImageUri?.toString() ?: product.imageUrl
             )
             repository.insert(updatedProduct)
-            withContext(Dispatchers.Main) {
-                hidePopups()
-                Toast.makeText(this@FakeCartActivity, "정보가 수정되었습니다.", Toast.LENGTH_SHORT).show()
-            }
+            withContext(Dispatchers.Main) { hidePopups() }
         }
     }
 
@@ -319,54 +365,20 @@ class FakeCartActivity : AppCompatActivity() {
 
     private fun validateAndSaveProduct() {
         lifecycleScope.launch {
-            var name = etManualName.text.toString()
+            var name = etManualName.text.toString().trim()
             var price = etManualPrice.text.toString().toIntOrNull() ?: 0
             val url = etUrlInput.text.toString()
-            var imageUrl = ""
             val expiryDays = when(spExpiry.selectedItemPosition) {
                 0 -> 1; 1 -> 3; 3 -> 14; 4 -> 30; else -> 7
-            }
-
-            if (currentTabIndex == 0 && url.isNotEmpty()) {
-                try {
-                    withContext(Dispatchers.IO) {
-                        val doc = Jsoup.connect(url).userAgent("Mozilla/5.0").timeout(5000).get()
-                        val ogTitle = doc.select("meta[property=og:title]").attr("content")
-                        val ogImgElement = doc.select("meta[property=og:image]").first()
-                        imageUrl = ogImgElement?.absUrl("content") ?: ""
-                        name = if (ogTitle.isNotEmpty()) ogTitle else doc.title().split(":")[0].trim()
-                        var priceStr = doc.select("meta[property=product:price:amount]").attr("content")
-                        if (priceStr.isEmpty()) priceStr = doc.select("meta[name=twitter:data1]").attr("content")
-                        if (priceStr.isNotEmpty()) price = priceStr.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 0
-                        
-                        var successCount = 0
-                        if (name.isNotEmpty() && name != "상품명 없음") successCount++
-                        if (price > 0) successCount++
-                        if (imageUrl.isNotEmpty()) successCount++
-
-                        if (successCount < 2) {
-                            withContext(Dispatchers.Main) {
-                                Toast.makeText(this@FakeCartActivity, "정보가 부족합니다. 사진 인식을 이용해 주세요!", Toast.LENGTH_LONG).show()
-                                selectTab(1)
-                            }
-                            return@withContext 
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e("FakeCart", "Jsoup error", e)
-                }
             }
 
             val product = FakeProduct(
                 id = UUID.randomUUID().toString(),
                 name = name.ifEmpty { "상품명 없음" },
-                category = "기타",
                 price = price,
                 url = url,
-                imageUrl = imageUrl,
                 expiryDays = expiryDays,
-                addedTime = System.currentTimeMillis(),
-                reasons = emptyList()
+                addedTime = System.currentTimeMillis()
             )
             repository.insert(product)
             withContext(Dispatchers.Main) { hidePopups() }
@@ -375,12 +387,6 @@ class FakeCartActivity : AppCompatActivity() {
 
     private fun showAddProductPopup() {
         editingProduct = null 
-        btnSubmit.text = "장바구니에 담기"
-        etManualName.setText("")
-        etManualPrice.setText("")
-        etUrlInput.setText("")
-        spExpiry.setSelection(2)
-        ivPhotoPreview.setImageResource(android.R.drawable.ic_menu_camera)
         dimView.visibility = View.VISIBLE
         cardAddProduct.visibility = View.VISIBLE
     }
@@ -399,52 +405,20 @@ class FakeCartActivity : AppCompatActivity() {
             val image = InputImage.fromFilePath(this, uri)
             val recognizer = TextRecognition.getClient(KoreanTextRecognizerOptions.Builder().build())
             recognizer.process(image).addOnSuccessListener { visionText -> parseOcrResult(visionText.text) }
-        } catch (e: Exception) {
-            Log.e("FakeCartOCR", "OCR error", e)
-        }
+        } catch (e: Exception) { }
     }
 
     private fun parseOcrResult(text: String) {
-        val lines = text.split("\n")
-        var foundName = ""
-        var foundPrice = 0
-        val priceRegex = Regex("([0-9,]{2,10})")
-        for (line in lines) {
-            val cleanLine = line.trim()
-            if (cleanLine.contains("원") || cleanLine.contains(",")) {
-                val match = priceRegex.find(cleanLine)
-                if (match != null) {
-                    val priceVal = match.groupValues[1].replace(",", "").toIntOrNull() ?: 0
-                    if (priceVal > 100) foundPrice = priceVal
-                }
-            }
-            if (foundName.isEmpty() && cleanLine.length > 5 && !cleanLine.contains("원")) foundName = cleanLine
-        }
-
-        // [수정] 수정 모드일 때는 이름과 가격을 건드리지 않고 리턴합니다.
-        if (cardEditProduct.visibility == View.VISIBLE) {
-            Toast.makeText(this, "사진이 변경되었습니다.", Toast.LENGTH_SHORT).show()
-            return
-        }
-
-        // 추가 모드일 때만 자동 입력을 수행합니다.
-        etManualName.setText(foundName)
-        etManualPrice.setText(if (foundPrice > 0) foundPrice.toString() else "")
+        if (cardEditProduct.visibility == View.VISIBLE) return
+        etManualName.setText(text.split("\n").firstOrNull() ?: "")
         selectTab(2)
     }
 
     private fun setupBackPress() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                // 홈 화면으로 이동
-                val intent = Intent(this@FakeCartActivity, HomeActivity::class.java)
-                intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
-                startActivity(intent)
-
-                // 왼쪽으로 이동하는 애니메이션 적용
+                startActivity(Intent(this@FakeCartActivity, HomeActivity::class.java).apply { addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT) })
                 overridePendingTransition(R.anim.slide_in_left, R.anim.slide_out_right)
-
-                // 현재 액티비티 종료
                 finish()
             }
         })

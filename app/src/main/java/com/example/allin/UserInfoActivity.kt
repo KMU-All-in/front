@@ -7,6 +7,7 @@ import android.util.Log
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import com.google.firebase.auth.FirebaseAuth
+import java.util.regex.Pattern
 
 class UserInfoActivity : AppCompatActivity() {
 
@@ -47,26 +48,35 @@ class UserInfoActivity : AppCompatActivity() {
                 return@setOnClickListener
             }
 
-            if (password.length < 6) {
-                Toast.makeText(this, "비밀번호는 최소 6자리 이상이어야 합니다.", Toast.LENGTH_SHORT).show()
+            // [추가] 비밀번호 제약: 영문 + 숫자 혼합, 8자리 이상
+            val passwordPattern = Pattern.compile("^(?=.*[A-Za-z])(?=.*\\d).{8,}$")
+            if (!passwordPattern.matcher(password).matches()) {
+                Toast.makeText(this, "비밀번호는 영문과 숫자를 혼합하여 8자리 이상이어야 합니다.", Toast.LENGTH_LONG).show()
                 return@setOnClickListener
             }
 
             btnNext.isEnabled = false
             btnNext.text = "가입 처리 중..."
 
-            // [핵심] Firebase 회원가입
+            // Firebase 회원가입
             auth.createUserWithEmailAndPassword(email, password)
                 .addOnCompleteListener(this) { task ->
                     if (task.isSuccessful) {
+                        val user = auth.currentUser
+                        
+                        // [추가] 이메일 인증 메일 발송
+                        user?.sendEmailVerification()
+                            ?.addOnCompleteListener { verifyTask ->
+                                if (verifyTask.isSuccessful) {
+                                    Toast.makeText(this, "인증 메일이 발송되었습니다. 이메일을 확인해 주세요!", Toast.LENGTH_LONG).show()
+                                }
+                            }
+
                         saveUserInfo(nickname, email, spAge.selectedItem.toString(), etUserJob.text.toString())
                         
-                        // 회원가입 직후에는 로그아웃 처리 (로그인 화면에서 다시 로그인하도록 유도)
+                        // 인증 전에는 접근을 제한하기 위해 로그아웃 처리
                         auth.signOut()
                         
-                        Toast.makeText(this, "회원가입이 완료되었습니다! 로그인해 주세요.", Toast.LENGTH_SHORT).show()
-                        
-                        // [수정] 로그인 화면(AllInActivity)으로 이동하며 스택 제거
                         val intent = Intent(this, AllInActivity::class.java)
                         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
                         startActivity(intent)

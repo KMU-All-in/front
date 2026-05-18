@@ -1,7 +1,5 @@
 package com.example.allin
 
-// 테스트 주섣
-
 import android.content.Intent
 import android.os.Bundle
 import android.widget.Button
@@ -18,11 +16,18 @@ class AllInActivity : AppCompatActivity() {
         
         auth = FirebaseAuth.getInstance()
 
-        // 자동 로그인 기능 다시 활성화
-        if (auth.currentUser != null) {
-            startActivity(Intent(this, MainActivity::class.java))
-            finish()
-            return 
+        // 자동 로그인 시에도 이메일 인증 여부 확인
+        val currentUser = auth.currentUser
+        if (currentUser != null) {
+            currentUser.reload().addOnCompleteListener { task ->
+                if (currentUser.isEmailVerified) {
+                    startActivity(Intent(this, MainActivity::class.java))
+                    finish()
+                } else {
+                    // 인증 안 된 경우 로그아웃 처리 후 로그인 화면 유지
+                    auth.signOut()
+                }
+            }
         }
 
         setContentView(R.layout.activity_login)
@@ -44,10 +49,17 @@ class AllInActivity : AppCompatActivity() {
             auth.signInWithEmailAndPassword(email, password)
                 .addOnCompleteListener(this) { task ->
                     if (task.isSuccessful) {
-                        Toast.makeText(this, "로그인 성공!", Toast.LENGTH_SHORT).show()
-                        val intent = Intent(this, MainActivity::class.java)
-                        startActivity(intent)
-                        finish()
+                        val user = auth.currentUser
+                        // [핵심] 이메일 인증 여부 체크
+                        if (user != null && user.isEmailVerified) {
+                            Toast.makeText(this, "로그인 성공!", Toast.LENGTH_SHORT).show()
+                            val intent = Intent(this, MainActivity::class.java)
+                            startActivity(intent)
+                            finish()
+                        } else {
+                            Toast.makeText(this, "이메일 인증이 필요합니다. 메일함을 확인해주세요.", Toast.LENGTH_LONG).show()
+                            auth.signOut()
+                        }
                     } else {
                         Toast.makeText(this, "로그인 실패: ${task.exception?.message}", Toast.LENGTH_SHORT).show()
                     }

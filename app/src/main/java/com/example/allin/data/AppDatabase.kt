@@ -6,8 +6,8 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 
-@Database(entities = [FakeProduct::class, LockedApp::class, Payment::class], version = 5, exportSchema = false)
-@TypeConverters(AppConverters::class) // 이름을 AppConverters로 변경
+@Database(entities = [FakeProduct::class, LockedApp::class, Payment::class], version = 6, exportSchema = false)
+@TypeConverters(AppConverters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun fakeProductDao(): FakeProductDao
     abstract fun lockedAppDao(): LockedAppDao
