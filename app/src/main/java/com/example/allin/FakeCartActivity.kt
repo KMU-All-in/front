@@ -74,9 +74,6 @@ class FakeCartActivity : AppCompatActivity() {
     private var currentTabIndex = 0
     private var selectedImageUri: Uri? = null
     private var editingProduct: FakeProduct? = null
-    
-    // 만료 팝업을 한 번만 띄우기 위한 플래그
-    private var isExpiredCheckDone = false
 
     private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
         if (isGranted) scheduleExpiryCheck()
@@ -111,7 +108,7 @@ class FakeCartActivity : AppCompatActivity() {
             setupListeners()
             observeCartItems()
             checkNotificationPermission()
-            handleIntent(intent)
+            handleIntent(intent) 
             dimView.post { selectTab(0) }
         } catch (e: Exception) {
             Log.e("FakeCartActivity", "Error in onCreate", e)
@@ -127,6 +124,7 @@ class FakeCartActivity : AppCompatActivity() {
                 etUrlInput.setText(sharedText)
                 selectTab(0)
                 showAddProductPopup()
+                intent.action = null
             }
         }
     }
@@ -196,7 +194,9 @@ class FakeCartActivity : AppCompatActivity() {
     }
 
     private fun setupListeners() {
-        findViewById<Button>(R.id.btnAddProduct)?.setOnClickListener { showAddProductPopup() }
+        findViewById<Button>(R.id.btnAddProduct)?.setOnClickListener { 
+            showAddProductPopup() 
+        }
         findViewById<ImageView>(R.id.btnCloseCard)?.setOnClickListener { hidePopups() }
         findViewById<ImageView>(R.id.btnCloseEdit)?.setOnClickListener { hidePopups() } 
         findViewById<ImageView>(R.id.btnCloseReason)?.setOnClickListener { hidePopups() }
@@ -240,53 +240,31 @@ class FakeCartActivity : AppCompatActivity() {
     private fun observeCartItems() {
         lifecycleScope.launch {
             repository.allProducts.collect { products ->
-                // [추가] 만료 상품 체크 로직
-                if (!isExpiredCheckDone) {
-                    checkAndShowExpiredDialog(products)
-                    isExpiredCheckDone = true
-                }
+                // 만료 체크 로직은 이제 MainActivity에서만 수행합니다.
                 renderCartItems(products)
             }
-        }
-    }
-
-    // 만료된 상품이 있는지 확인하고 팝업 띄우기
-    private fun checkAndShowExpiredDialog(products: List<FakeProduct>) {
-        val now = System.currentTimeMillis()
-        val expiredProducts = products.filter { 
-            val expiryTime = it.addedTime + TimeUnit.DAYS.toMillis(it.expiryDays.toLong())
-            now >= expiryTime
-        }
-
-        if (expiredProducts.isNotEmpty()) {
-            AlertDialog.Builder(this)
-                .setTitle("숙고 기간 만료 안내")
-                .setMessage("숙고 기간이 지난 상품이 ${expiredProducts.size}건 있습니다. 삭제하시겠습니까?")
-                .setPositiveButton("삭제") { _, _ ->
-                    lifecycleScope.launch {
-                        expiredProducts.forEach { repository.delete(it) }
-                        Toast.makeText(this@FakeCartActivity, "만료된 상품이 삭제되었습니다.", Toast.LENGTH_SHORT).show()
-                    }
-                }
-                .setNegativeButton("유지", null)
-                .show()
         }
     }
 
     private fun renderCartItems(products: List<FakeProduct>) {
         cartItemsContainer.removeAllViews()
         val dec = DecimalFormat("#,###")
-        val now = System.currentTimeMillis()
+        val today = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }
 
         for (product in products) {
-            val expiryTime = product.addedTime + TimeUnit.DAYS.toMillis(product.expiryDays.toLong())
+            val expiryCal = Calendar.getInstance().apply {
+                timeInMillis = product.addedTime
+                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+                add(Calendar.DAY_OF_YEAR, product.expiryDays)
+            }
             
-            // [수정] 자동 삭제 로직을 제거했습니다. (사용자가 팝업에서 선택함)
+            val diffMillis = expiryCal.timeInMillis - today.timeInMillis
+            val diffInDays = TimeUnit.MILLISECONDS.toDays(diffMillis)
+            val dDayText = if (diffInDays <= 0L) "D-Day" else "D-$diffInDays"
 
             val itemView = LayoutInflater.from(this).inflate(R.layout.item_cart_product, cartItemsContainer, false)
-            val diffInDays = TimeUnit.MILLISECONDS.toDays(expiryTime - now)
-            val dDayText = if (diffInDays <= 0L) "D-Day" else "D-$diffInDays"
-            
             itemView.findViewById<TextView>(R.id.tvRemainingDays)?.text = dDayText
             itemView.findViewById<TextView>(R.id.tvProductName)?.text = product.name
             itemView.findViewById<TextView>(R.id.tvProductPrice)?.text = "${dec.format(product.price)}원"
@@ -308,7 +286,21 @@ class FakeCartActivity : AppCompatActivity() {
                 popup.setOnMenuItemClickListener { menuItem ->
                     when (menuItem.title) {
                         "수정" -> showEditProductPopup(product)
-                        "삭제" -> lifecycleScope.launch { repository.delete(product) }
+                        "삭제" -> {
+                            val deleteDialog = AlertDialog.Builder(this)
+                                .setTitle("상품 삭제")
+                                .setMessage("이 상품을 삭제하시겠습니까?")
+                                .setPositiveButton("삭제") { _, _ ->
+                                    lifecycleScope.launch { repository.delete(product) }
+                                }
+                                .setNegativeButton("취소", null)
+                                .create()
+                            deleteDialog.setOnShowListener {
+                                deleteDialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(Color.parseColor("#212121"))
+                                deleteDialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(Color.parseColor("#212121"))
+                            }
+                            deleteDialog.show()
+                        }
                     }
                     true
                 }
@@ -367,9 +359,24 @@ class FakeCartActivity : AppCompatActivity() {
         lifecycleScope.launch {
             var name = etManualName.text.toString().trim()
             var price = etManualPrice.text.toString().toIntOrNull() ?: 0
-            val url = etUrlInput.text.toString()
+            val url = etUrlInput.text.toString().trim()
+            var imageUrl = ""
             val expiryDays = when(spExpiry.selectedItemPosition) {
                 0 -> 1; 1 -> 3; 3 -> 14; 4 -> 30; else -> 7
+            }
+
+            if (currentTabIndex == 0 && url.isNotEmpty()) {
+                try {
+                    withContext(Dispatchers.IO) {
+                        val doc = Jsoup.connect(url).userAgent("Mozilla/5.0").timeout(5000).get()
+                        name = doc.select("meta[property=og:title]").attr("content").ifEmpty { doc.title().split(":")[0].trim() }
+                        imageUrl = doc.select("meta[property=og:image]").attr("content")
+                        val priceStr = doc.select("meta[property=product:price:amount]").attr("content")
+                        if (priceStr.isNotEmpty()) price = priceStr.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 0
+                    }
+                } catch (e: Exception) {
+                    Log.e("FakeCart", "Jsoup error", e)
+                }
             }
 
             val product = FakeProduct(
@@ -377,16 +384,21 @@ class FakeCartActivity : AppCompatActivity() {
                 name = name.ifEmpty { "상품명 없음" },
                 price = price,
                 url = url,
+                imageUrl = imageUrl,
                 expiryDays = expiryDays,
                 addedTime = System.currentTimeMillis()
             )
             repository.insert(product)
-            withContext(Dispatchers.Main) { hidePopups() }
+            withContext(Dispatchers.Main) { 
+                Toast.makeText(this@FakeCartActivity, "장바구니에 추가되었습니다.", Toast.LENGTH_SHORT).show()
+                hidePopups() 
+            }
         }
     }
 
     private fun showAddProductPopup() {
         editingProduct = null 
+        clearInputs()
         dimView.visibility = View.VISIBLE
         cardAddProduct.visibility = View.VISIBLE
     }
@@ -398,6 +410,16 @@ class FakeCartActivity : AppCompatActivity() {
         cardAddProduct.visibility = View.GONE
         cardEditProduct.visibility = View.GONE 
         cardAddReason.visibility = View.GONE
+        clearInputs()
+    }
+
+    private fun clearInputs() {
+        etUrlInput.setText("")
+        etManualName.setText("")
+        etManualPrice.setText("")
+        etNewReason.setText("")
+        ivPhotoPreview.setImageResource(android.R.drawable.ic_menu_camera)
+        selectedImageUri = null
     }
 
     private fun processOcr(uri: Uri) {

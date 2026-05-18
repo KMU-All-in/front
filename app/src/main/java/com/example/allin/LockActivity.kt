@@ -23,7 +23,7 @@ class LockActivity : AppCompatActivity() {
     private lateinit var tvLockAdvice: TextView
     private lateinit var pinIndicatorContainer: android.widget.LinearLayout
     private var currentPin = ""
-    private var correctPin = "1234" // 기본값, Firestore에서 가져옵니다.
+    private var correctPin = "1234" 
 
     private var targetPackageName: String? = null
 
@@ -37,7 +37,10 @@ class LockActivity : AppCompatActivity() {
         setupKeypad()
         updatePinIndicators()
         
-        // Firestore에서 실제 PIN 가져오기
+        // [수정] Firestore 이전에 로컬 저장소에서 먼저 가져와 즉시 반영
+        val sharedPref = getSharedPreferences("LockPrefs", Context.MODE_PRIVATE)
+        correctPin = sharedPref.getString("LOCK_PIN", "1234") ?: "1234"
+
         fetchLockPin()
 
         targetPackageName = intent.getStringExtra("PACKAGE_NAME")
@@ -45,8 +48,8 @@ class LockActivity : AppCompatActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        setIntent(intent) // 새로 들어온 인텐트로 교체
-        targetPackageName = intent.getStringExtra("PACKAGE_NAME") // 패키지명 다시 확실하게 백업!
+        setIntent(intent)
+        targetPackageName = intent.getStringExtra("PACKAGE_NAME")
     }
 
     private fun fetchLockPin() {
@@ -55,7 +58,11 @@ class LockActivity : AppCompatActivity() {
             .get()
             .addOnSuccessListener { document ->
                 if (document != null && document.contains("lock_pin")) {
-                    correctPin = document.getString("lock_pin") ?: "1234"
+                    val serverPin = document.getString("lock_pin") ?: "1234"
+                    correctPin = serverPin
+                    // 서버 값을 로컬에도 동기화
+                    getSharedPreferences("LockPrefs", Context.MODE_PRIVATE).edit()
+                        .putString("LOCK_PIN", serverPin).apply()
                 }
             }
     }
@@ -109,10 +116,7 @@ class LockActivity : AppCompatActivity() {
             resetFailCount()
 
             val targetPackage = targetPackageName ?: intent.getStringExtra("PACKAGE_NAME")
-
-            android.util.Log.d("LockActivity", "면죄부 발급 패키지명: $targetPackage")
             com.example.allin.worker.AppMonitorService.unlockedAppPackage = targetPackage
-
             finish()
         } else {
             handleFail()
@@ -166,7 +170,6 @@ class LockActivity : AppCompatActivity() {
 
     override fun onBackPressed() {
         super.onBackPressed()
-
         val intent = Intent(Intent.ACTION_MAIN)
         intent.addCategory(Intent.CATEGORY_HOME)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK

@@ -41,22 +41,16 @@ class AppLockActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_app_lock)
 
-        // Repository 초기화
         val dao = AppDatabase.getDatabase(applicationContext).lockedAppDao()
         repository = LockedAppRepository(dao)
 
         initViews()
         setupRecyclerView()
         setupListeners()
-        
         checkPermissions()
-        
-        // Room 데이터 실시간 관찰
         observeLockedApps()
 
-        // 앱 시작 시 서버 데이터와 로컬 데이터 동기화
         repository.syncFromFirestore(packageManager)
-
         swMainLock.isChecked = isServiceRunning(AppMonitorService::class.java)
     }
 
@@ -69,7 +63,6 @@ class AppLockActivity : AppCompatActivity() {
     }
 
     private fun setupRecyclerView() {
-        // 어댑터에 데이터와 토글(삭제) 콜백 전달
         adapter = LockedAppAdapter(emptyList()) { packageName, isLocked ->
             if (!isLocked) {
                 lifecycleScope.launch {
@@ -115,7 +108,6 @@ class AppLockActivity : AppCompatActivity() {
     }
 
     private fun observeLockedApps() {
-        // Repository의 Flow를 관찰하여 UI 업데이트
         lifecycleScope.launch {
             repository.allLockedApps.collect { dbApps ->
                 val pm = packageManager
@@ -187,7 +179,6 @@ class AppLockActivity : AppCompatActivity() {
             .setMessage("쇼핑 앱 잠금 리스트를 삭제하겠습니까?")
             .setPositiveButton("삭제") { _, _ ->
                 lifecycleScope.launch {
-                    // 전체 삭제 로직 (Repository에 추가 필요)
                     repository.updateAllLockedApps(emptyList())
                 }
             }
@@ -197,13 +188,30 @@ class AppLockActivity : AppCompatActivity() {
 
     private fun showPasswordChangeDialog() {
         val currentUser = auth.currentUser ?: return
-        val et = EditText(this).apply { inputType = android.text.InputType.TYPE_CLASS_NUMBER }
-        AlertDialog.Builder(this).setTitle("새 비밀번호").setView(et)
+        val et = EditText(this).apply { 
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER 
+            hint = "숫자 4자리"
+        }
+        AlertDialog.Builder(this)
+            .setTitle("새 비밀번호 설정")
+            .setView(et)
             .setPositiveButton("변경") { _, _ ->
                 val pin = et.text.toString()
                 if (pin.length == 4) {
+                    // 1. 로컬 저장 (즉시 반영을 위해)
+                    val sharedPref = getSharedPreferences("LockPrefs", Context.MODE_PRIVATE)
+                    sharedPref.edit().putString("LOCK_PIN", pin).apply()
+
+                    // 2. 서버 저장
                     db.collection("users").document(currentUser.uid).update("lock_pin", pin)
+                        .addOnSuccessListener {
+                            Toast.makeText(this, "비밀번호가 변경되었습니다.", Toast.LENGTH_SHORT).show()
+                        }
+                } else {
+                    Toast.makeText(this, "4자리 숫자를 입력해주세요.", Toast.LENGTH_SHORT).show()
                 }
-            }.show()
+            }
+            .setNegativeButton("취소", null)
+            .show()
     }
 }

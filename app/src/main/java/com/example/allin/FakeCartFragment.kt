@@ -11,6 +11,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AlertDialog
 import androidx.cardview.widget.CardView
 import androidx.fragment.app.Fragment
 import androidx.lifecycle.lifecycleScope
@@ -31,7 +32,6 @@ import java.util.concurrent.TimeUnit
 
 class FakeCartFragment : Fragment() {
 
-    // 뷰 변수들
     private lateinit var cartItemsContainer: LinearLayout
     private lateinit var cardAddProduct: CardView
     private lateinit var cardEditProduct: CardView
@@ -62,7 +62,6 @@ class FakeCartFragment : Fragment() {
     private var selectedImageUri: Uri? = null
     private var editingProduct: FakeProduct? = null
 
-    // 사진 선택 런처 (Fragment에서는 registerForActivityResult를 바로 사용 가능)
     private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let {
             selectedImageUri = it
@@ -75,22 +74,13 @@ class FakeCartFragment : Fragment() {
         }
     }
 
-    // Fragment는 onCreateView에서 레이아웃을 생성합니다.
-    override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
-        savedInstanceState: Bundle?
-    ): View? {
-        // 기존 activity_fake_cart.xml을 그대로 사용합니다.
+    override fun onCreateView(inflater: LayoutInflater, container: ViewGroup?, savedInstanceState: Bundle?): View? {
         val view = inflater.inflate(R.layout.activity_fake_cart, container, false)
-
         repository = FakeCartRepository()
         initViews(view)
         setupListeners(view)
         observeCartItems()
-
-        // 초기 탭 설정
         view.post { selectTab(0) }
-
         return view
     }
 
@@ -124,7 +114,6 @@ class FakeCartFragment : Fragment() {
         btnSubmitReason = view.findViewById(R.id.btnSubmitReason)
 
         val expiryOptions = arrayOf("1일", "3일", "7일(권장)", "14일", "30일")
-        // Activity 대신 requireContext() 사용
         spExpiry.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, expiryOptions)
         spExpiry.setSelection(2)
     }
@@ -145,23 +134,21 @@ class FakeCartFragment : Fragment() {
         btnSubmit.setOnClickListener { validateAndSaveProduct() }
         btnSubmitEdit.setOnClickListener { saveEditedProduct() }
         btnSubmitReason.setOnClickListener { saveNewReason() }
-
-        // [중요] 네비게이션 버튼들은 이제 MainActivity에서 관리하므로 여기서는 삭제하거나 주석 처리합니다.
     }
 
     private fun selectTab(index: Int) {
         currentTabIndex = index
         val activeBg = Color.BLACK
         val inactiveBg = Color.parseColor("#F2F4F8")
-        val activeText = Color.WHITE
-        val inactiveText = Color.parseColor("#666666")
+        val activeTextColor = Color.WHITE
+        val inactiveTextColor = Color.parseColor("#666666")
 
         tabUrl.backgroundTintList = ColorStateList.valueOf(if (index == 0) activeBg else inactiveBg)
-        tabUrl.setTextColor(if (index == 0) activeText else inactiveText)
+        tabUrl.setTextColor(if (index == 0) activeTextColor else inactiveTextColor)
         tabPhoto.backgroundTintList = ColorStateList.valueOf(if (index == 1) activeBg else inactiveBg)
-        tabPhoto.setTextColor(if (index == 1) activeText else inactiveText)
+        tabPhoto.setTextColor(if (index == 1) activeTextColor else inactiveTextColor)
         tabManual.backgroundTintList = ColorStateList.valueOf(if (index == 2) activeBg else inactiveBg)
-        tabManual.setTextColor(if (index == 2) activeText else inactiveText)
+        tabManual.setTextColor(if (index == 2) activeTextColor else inactiveTextColor)
 
         layoutUrlInput.visibility = if (index == 0) View.VISIBLE else View.GONE
         layoutPhotoInput.visibility = if (index == 1) View.VISIBLE else View.GONE
@@ -171,6 +158,7 @@ class FakeCartFragment : Fragment() {
     private fun observeCartItems() {
         viewLifecycleOwner.lifecycleScope.launch {
             repository.allProducts.collect { products ->
+                // 만료 체크 로직은 이제 MainActivity에서만 수행하므로 삭제했습니다.
                 renderCartItems(products)
             }
         }
@@ -179,19 +167,23 @@ class FakeCartFragment : Fragment() {
     private fun renderCartItems(products: List<FakeProduct>) {
         cartItemsContainer.removeAllViews()
         val dec = DecimalFormat("#,###")
-        val now = System.currentTimeMillis()
+        val today = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+        }
 
         for (product in products) {
-            val expiryTime = product.addedTime + TimeUnit.DAYS.toMillis(product.expiryDays.toLong())
-            if (now >= expiryTime) {
-                viewLifecycleOwner.lifecycleScope.launch { repository.delete(product) }
-                continue
+            val expiryCal = Calendar.getInstance().apply {
+                timeInMillis = product.addedTime
+                set(Calendar.HOUR_OF_DAY, 0); set(Calendar.MINUTE, 0); set(Calendar.SECOND, 0); set(Calendar.MILLISECOND, 0)
+                add(Calendar.DAY_OF_YEAR, product.expiryDays)
             }
+            
+            val diffMillis = expiryCal.timeInMillis - today.timeInMillis
+            val diffInDays = TimeUnit.MILLISECONDS.toDays(diffMillis)
+            val dDayText = if (diffInDays <= 0L) "D-Day" else "D-$diffInDays"
 
             val itemView = LayoutInflater.from(requireContext()).inflate(R.layout.item_cart_product, cartItemsContainer, false)
-            // ... (renderCartItems 내부 로직은 기존과 동일하며 Context만 requireContext()로 수정)
-
-            itemView.findViewById<TextView>(R.id.tvRemainingDays)?.text = if (TimeUnit.MILLISECONDS.toDays(expiryTime - now) <= 0L) "D-Day" else "D-${TimeUnit.MILLISECONDS.toDays(expiryTime - now)}"
+            itemView.findViewById<TextView>(R.id.tvRemainingDays)?.text = dDayText
             itemView.findViewById<TextView>(R.id.tvProductName)?.text = product.name
             itemView.findViewById<TextView>(R.id.tvProductPrice)?.text = "${dec.format(product.price)}원"
 
@@ -199,6 +191,10 @@ class FakeCartFragment : Fragment() {
             if (product.imageUrl.isNotEmpty()) {
                 Glide.with(this).load(product.imageUrl).placeholder(android.R.drawable.ic_menu_gallery).into(ivProduct)
             }
+
+            val reasonsText = if (product.reasons.isEmpty()) "아직 작성된 이유가 없습니다."
+            else product.reasons.joinToString("\n") { "• $it" }
+            itemView.findViewById<TextView>(R.id.tvReasonsSummary)?.text = reasonsText
 
             itemView.findViewById<Button>(R.id.btnAddReason)?.setOnClickListener { showAddReasonPopup(product) }
             itemView.findViewById<ImageButton>(R.id.btnOptions)?.setOnClickListener { v ->
@@ -208,7 +204,21 @@ class FakeCartFragment : Fragment() {
                 popup.setOnMenuItemClickListener { menuItem ->
                     when (menuItem.title) {
                         "수정" -> showEditProductPopup(product)
-                        "삭제" -> viewLifecycleOwner.lifecycleScope.launch { repository.delete(product) }
+                        "삭제" -> {
+                            val dialog = AlertDialog.Builder(requireContext())
+                                .setTitle("상품 삭제")
+                                .setMessage("이 상품을 삭제하시겠습니까?")
+                                .setPositiveButton("삭제") { _, _ ->
+                                    viewLifecycleOwner.lifecycleScope.launch { repository.delete(product) }
+                                }
+                                .setNegativeButton("취소", null)
+                                .create()
+                            dialog.setOnShowListener {
+                                dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(Color.parseColor("#212121"))
+                                dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(Color.parseColor("#212121"))
+                            }
+                            dialog.show()
+                        }
                     }
                     true
                 }
@@ -232,14 +242,11 @@ class FakeCartFragment : Fragment() {
         viewLifecycleOwner.lifecycleScope.launch {
             val updatedProduct = product.copy(
                 name = etEditName.text.toString().trim().ifEmpty { product.name },
-                price = etEditPrice.text.toString().toIntOrNull() ?: 0,
-                imageUrl = if (selectedImageUri != null) selectedImageUri.toString() else product.imageUrl
+                price = etEditPrice.text.toString().toIntOrNull() ?: product.price,
+                imageUrl = selectedImageUri?.toString() ?: product.imageUrl
             )
             repository.insert(updatedProduct)
-            withContext(Dispatchers.Main) {
-                hidePopups()
-                Toast.makeText(requireContext(), "수정되었습니다.", Toast.LENGTH_SHORT).show()
-            }
+            withContext(Dispatchers.Main) { hidePopups() }
         }
     }
 
@@ -263,22 +270,25 @@ class FakeCartFragment : Fragment() {
 
     private fun validateAndSaveProduct() {
         viewLifecycleOwner.lifecycleScope.launch {
-            var name = etManualName.text.toString()
+            var name = etManualName.text.toString().trim()
             var price = etManualPrice.text.toString().toIntOrNull() ?: 0
-            val url = etUrlInput.text.toString()
+            val url = etUrlInput.text.toString().trim()
             var imageUrl = ""
             val expiryDays = when(spExpiry.selectedItemPosition) {
-                0 -> 1; 1 -> 3; 3 -> 14; 4 -> 30; else -> 7
+                0 -> 1
+                1 -> 3
+                2 -> 7
+                3 -> 14
+                4 -> 30
+                else -> 7
             }
 
             if (currentTabIndex == 0 && url.isNotEmpty()) {
                 try {
                     withContext(Dispatchers.IO) {
                         val doc = Jsoup.connect(url).userAgent("Mozilla/5.0").timeout(5000).get()
-                        val ogTitle = doc.select("meta[property=og:title]").attr("content")
-                        val ogImgElement = doc.select("meta[property=og:image]").first()
-                        imageUrl = ogImgElement?.absUrl("content") ?: ""
-                        name = if (ogTitle.isNotEmpty()) ogTitle else doc.title().split(":")[0].trim()
+                        name = doc.select("meta[property=og:title]").attr("content").ifEmpty { doc.title().split(":")[0].trim() }
+                        imageUrl = doc.select("meta[property=og:image]").attr("content")
                         val priceStr = doc.select("meta[property=product:price:amount]").attr("content")
                         if (priceStr.isNotEmpty()) price = priceStr.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 0
                     }
@@ -293,15 +303,19 @@ class FakeCartFragment : Fragment() {
                 url = url,
                 imageUrl = imageUrl,
                 expiryDays = expiryDays,
-                addedTime = System.currentTimeMillis(),
-                reasons = emptyList()
+                addedTime = System.currentTimeMillis()
             )
             repository.insert(product)
-            withContext(Dispatchers.Main) { hidePopups() }
+            withContext(Dispatchers.Main) { 
+                Toast.makeText(requireContext(), "장바구니에 추가되었습니다.", Toast.LENGTH_SHORT).show()
+                hidePopups() 
+            }
         }
     }
 
     private fun showAddProductPopup() {
+        editingProduct = null 
+        clearInputs()
         dimView.visibility = View.VISIBLE
         cardAddProduct.visibility = View.VISIBLE
     }
@@ -311,6 +325,16 @@ class FakeCartFragment : Fragment() {
         cardAddProduct.visibility = View.GONE
         cardEditProduct.visibility = View.GONE
         cardAddReason.visibility = View.GONE
+        clearInputs()
+    }
+
+    private fun clearInputs() {
+        etUrlInput.setText("")
+        etManualName.setText("")
+        etManualPrice.setText("")
+        etNewReason.setText("")
+        ivPhotoPreview.setImageResource(android.R.drawable.ic_menu_camera)
+        selectedImageUri = null
     }
 
     private fun processOcr(uri: Uri) {
@@ -320,7 +344,6 @@ class FakeCartFragment : Fragment() {
     }
 
     private fun parseOcrResult(text: String) {
-        // 기존 parseOcrResult 로직과 동일
         if (cardEditProduct.visibility == View.VISIBLE) return
         etManualName.setText(text.split("\n").firstOrNull() ?: "")
         selectTab(2)

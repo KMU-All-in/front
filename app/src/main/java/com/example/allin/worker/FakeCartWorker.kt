@@ -10,12 +10,13 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
-import com.example.allin.FakeCartActivity
+import com.example.allin.MainActivity
 import com.example.allin.R
 import com.example.allin.data.FakeProduct
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
+import java.util.*
 import java.util.concurrent.TimeUnit
 
 class FakeCartWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
@@ -24,26 +25,32 @@ class FakeCartWorker(context: Context, params: WorkerParameters) : CoroutineWork
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return Result.success()
         val db = FirebaseFirestore.getInstance()
         val now = System.currentTimeMillis()
-        val oneDayMillis = TimeUnit.DAYS.toMillis(1)
 
         try {
             val snapshot = db.collection("users").document(uid).collection("fakecart").get().await()
             val products = snapshot.toObjects(FakeProduct::class.java)
 
             for (product in products) {
-                val expiryTime = product.addedTime + TimeUnit.DAYS.toMillis(product.expiryDays.toLong())
-                val remainingTime = expiryTime - now
+                // 날짜 기반 만료 시점 계산 (만료일 00:00:00)
+                val cal = Calendar.getInstance()
+                cal.timeInMillis = product.addedTime
+                cal.set(Calendar.HOUR_OF_DAY, 0)
+                cal.set(Calendar.MINUTE, 0)
+                cal.set(Calendar.SECOND, 0)
+                cal.set(Calendar.MILLISECOND, 0)
+                cal.add(Calendar.DAY_OF_YEAR, product.expiryDays)
+                val expiryTimestamp = cal.timeInMillis
 
-                // [수정] 백그라운드 자동 삭제 로직을 제거했습니다. (사용자가 앱에서 직접 결정함)
+                // [수정] D-1 알림 로직 제거됨
 
-                // [2] 하루 전 알림 (D-1) 로직은 유지
-                if (remainingTime > 0 && remainingTime < oneDayMillis && !product.notifiedD1) {
-                    Log.d("FakeCartWorker", "D-1 알림 발송: ${product.name}")
-                    sendNotification(product.name)
+                // D-Day 12시 1분 알림 로직 (만료 당일 00:01 이후)
+                if (now >= expiryTimestamp + TimeUnit.MINUTES.toMillis(1) && !product.notifiedD0) {
+                    sendNotification(product.name, "숙고 기간이 만료되었습니다! 삭제하시겠습니까, 유지하시겠습니까?")
                     
+                    // Firestore 업데이트 (당일 알림 완료 표시)
                     db.collection("users").document(uid).collection("fakecart")
                         .document(product.id)
-                        .update("notifiedD1", true)
+                        .update("notifiedD0", true)
                         .await()
                 }
             }
@@ -54,7 +61,7 @@ class FakeCartWorker(context: Context, params: WorkerParameters) : CoroutineWork
         }
     }
 
-    private fun sendNotification(productName: String) {
+    private fun sendNotification(productName: String, message: String) {
         val channelId = "FakeCartExpiryChannel"
         val notificationManager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
@@ -63,7 +70,8 @@ class FakeCartWorker(context: Context, params: WorkerParameters) : CoroutineWork
             notificationManager.createNotificationChannel(channel)
         }
 
-        val intent = Intent(applicationContext, FakeCartActivity::class.java).apply {
+        // 알림 클릭 시 메인 화면(만료 팝업이 뜰 곳)으로 이동
+        val intent = Intent(applicationContext, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
         val pendingIntent = PendingIntent.getActivity(
@@ -73,8 +81,8 @@ class FakeCartWorker(context: Context, params: WorkerParameters) : CoroutineWork
 
         val notification = NotificationCompat.Builder(applicationContext, channelId)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("숙고 기간 종료 임박!")
-            .setContentText("'${productName}'의 숙고 기간이 하루 남았습니다. 정말 구매하실 건가요?")
+            .setContentTitle("가짜 장바구니 알림")
+            .setContentText("'${productName}' $message")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
