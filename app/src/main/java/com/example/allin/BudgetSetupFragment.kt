@@ -89,6 +89,8 @@ class BudgetFragment : Fragment() {
         btnSaveBudget.setOnClickListener { saveData() }
 
         // ❌ 네비게이션 리스너는 MainActivity에서 관리하므로 삭제
+
+        dimView.setOnClickListener { }
     }
 
     private fun showAddPlanPopup() {
@@ -101,6 +103,8 @@ class BudgetFragment : Fragment() {
         spCategory.visibility = View.GONE
         dimView.visibility = View.VISIBLE
         cardAddPlan.visibility = View.VISIBLE
+        dimView.bringToFront()
+        cardAddPlan.bringToFront()
     }
 
     private fun showAddExpensePopup(category: String) {
@@ -118,6 +122,9 @@ class BudgetFragment : Fragment() {
 
         dimView.visibility = View.VISIBLE
         cardAddPlan.visibility = View.VISIBLE
+
+        dimView.bringToFront()
+        cardAddPlan.bringToFront()
     }
 
     private fun hidePopup() {

@@ -160,6 +160,8 @@ class FakeCartFragment : Fragment() {
         btnSubmit.setOnClickListener { validateAndSaveProduct() }
         btnSubmitEdit.setOnClickListener { saveEditedProduct() }
         btnSubmitReason.setOnClickListener { saveNewReason() }
+
+        dimView.setOnClickListener { }
     }
 
     private fun selectTab(index: Int) {
@@ -258,6 +260,8 @@ class FakeCartFragment : Fragment() {
         editingProduct = product
         dimView.visibility = View.VISIBLE
         cardEditProduct.visibility = View.VISIBLE
+        dimView.bringToFront()
+        cardEditProduct.bringToFront()
         etEditName.setText(product.name)
         etEditPrice.setText(product.price.toString())
         Glide.with(this).load(product.imageUrl).into(ivEditPhotoPreview)
@@ -280,6 +284,8 @@ class FakeCartFragment : Fragment() {
         selectedProductForReason = product
         dimView.visibility = View.VISIBLE
         cardAddReason.visibility = View.VISIBLE
+        dimView.bringToFront()
+        cardAddReason.bringToFront()
         etNewReason.setText("")
     }
 
@@ -340,10 +346,12 @@ class FakeCartFragment : Fragment() {
     }
 
     private fun showAddProductPopup() {
-        editingProduct = null 
+        editingProduct = null
         clearInputs()
         dimView.visibility = View.VISIBLE
         cardAddProduct.visibility = View.VISIBLE
+        dimView.bringToFront()
+        cardAddProduct.bringToFront()
     }
 
     private fun hidePopups() {
