@@ -45,6 +45,8 @@ class PaymentRepository(private val paymentDao: PaymentDao) {
         
         val user = auth.currentUser
         if (user != null) {
+            syncFirestorePaymentUpdate(user.uid, oldPayment, newPayment)
+
             val diff = (newPayment.amount - oldPayment.amount).toLong()
             if (diff != 0L) {
                 updateReportTotalSpent(user.uid, diff, context)
@@ -57,8 +59,44 @@ class PaymentRepository(private val paymentDao: PaymentDao) {
         
         val user = auth.currentUser
         if (user != null) {
+            syncFirestorePaymentDelete(user.uid, payment)
             updateReportTotalSpent(user.uid, -(payment.amount.toLong()), context)
         }
+    }
+
+    private fun syncFirestorePaymentUpdate(uid: String, oldPayment: Payment, newPayment: Payment) {
+        firestore.collection("users").document(uid)
+            .collection("transactions")
+            .whereEqualTo("date", oldPayment.date)
+            .whereEqualTo("amount", oldPayment.amount)
+            .whereEqualTo("storeName", oldPayment.storeName)
+            .limit(1)
+            .get()
+            .addOnSuccessListener { snapshots ->
+                val doc = snapshots.documents.firstOrNull() ?: return@addOnSuccessListener
+                doc.reference.update(
+                    mapOf(
+                        "amount" to newPayment.amount,
+                        "storeName" to newPayment.storeName,
+                        "category" to newPayment.category,
+                        "itemName" to newPayment.itemName,
+                        "date" to newPayment.date
+                    )
+                )
+            }
+    }
+
+    private fun syncFirestorePaymentDelete(uid: String, payment: Payment) {
+        firestore.collection("users").document(uid)
+            .collection("transactions")
+            .whereEqualTo("date", payment.date)
+            .whereEqualTo("amount", payment.amount)
+            .whereEqualTo("storeName", payment.storeName)
+            .limit(1)
+            .get()
+            .addOnSuccessListener { snapshots ->
+                snapshots.documents.firstOrNull()?.reference?.delete()
+            }
     }
 
     private fun updateReportTotalSpent(uid: String, amountDelta: Long, context: Context) {

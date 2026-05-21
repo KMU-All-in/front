@@ -35,6 +35,7 @@ class PaymentAdapter(
         private val tvStoreName: TextView = itemView.findViewById(R.id.tvStoreName)
         private val tvAmount: TextView = itemView.findViewById(R.id.tvAmount)
         private val tvDate: TextView = itemView.findViewById(R.id.tvDate)
+        private val tvCategory: TextView = itemView.findViewById(R.id.tvCategory)
         private val btnEdit: Button = itemView.findViewById(R.id.btnEdit)
         private val btnDelete: Button = itemView.findViewById(R.id.btnDelete)
 
@@ -42,7 +43,9 @@ class PaymentAdapter(
             tvStoreName.text = payment.storeName
             tvAmount.text = moneyFormat.format(payment.amount)
             tvDate.text = dateFormat.format(Date(payment.date))
+            tvCategory.text = payment.category
 
+            itemView.setOnClickListener { onEdit(payment) }
             btnEdit.setOnClickListener { onEdit(payment) }
             btnDelete.setOnClickListener { onDelete(payment) }
         }

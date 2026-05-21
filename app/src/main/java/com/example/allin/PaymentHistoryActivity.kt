@@ -15,6 +15,7 @@ import com.example.allin.data.Payment
 import com.example.allin.data.PaymentRepository
 import com.google.android.material.floatingactionbutton.FloatingActionButton
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 class PaymentHistoryActivity : AppCompatActivity() {
@@ -23,6 +24,8 @@ class PaymentHistoryActivity : AppCompatActivity() {
     private lateinit var adapter: PaymentAdapter
     private lateinit var rvPayments: RecyclerView
     private lateinit var spinnerSort: Spinner
+    private lateinit var spinnerCategoryFilter: Spinner
+    private var paymentsJob: Job? = null
     
     // 카테고리 목록 정의
     private val categories = arrayOf("식품/음료", "패션/의류", "뷰티/화장품", "전자기기", "도서/문구", "생활용품", "스포츠/레저", "기타")
@@ -37,6 +40,7 @@ class PaymentHistoryActivity : AppCompatActivity() {
         setupToolbar()
         setupRecyclerView()
         setupSortSpinner()
+        setupCategoryFilter()
         setupAddButton()
         observePayments()
     }
@@ -84,6 +88,22 @@ class PaymentHistoryActivity : AppCompatActivity() {
         }
     }
 
+    private fun setupCategoryFilter() {
+        spinnerCategoryFilter = findViewById(R.id.spinnerCategoryFilter)
+        val filterItems = arrayOf("전체 카테고리") + categories
+        val categoryAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, filterItems)
+        categoryAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+        spinnerCategoryFilter.adapter = categoryAdapter
+
+        spinnerCategoryFilter.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(p0: AdapterView<*>?, p1: View?, p2: Int, p3: Long) {
+                observePayments()
+            }
+
+            override fun onNothingSelected(p0: AdapterView<*>?) {}
+        }
+    }
+
     private fun setupAddButton() {
         findViewById<FloatingActionButton>(R.id.fabAdd)?.setOnClickListener {
             showAddDialog()
@@ -91,12 +111,22 @@ class PaymentHistoryActivity : AppCompatActivity() {
     }
 
     private fun observePayments() {
-        lifecycleScope.launch {
+        if (!::spinnerSort.isInitialized || !::spinnerCategoryFilter.isInitialized) return
+
+        paymentsJob?.cancel()
+        paymentsJob = lifecycleScope.launch {
             repository.allPayments.collectLatest { payments ->
+                val selectedCategory = spinnerCategoryFilter.selectedItem?.toString()
+                val filteredList = if (selectedCategory == null || selectedCategory == "전체 카테고리") {
+                    payments
+                } else {
+                    payments.filter { it.category == selectedCategory }
+                }
+
                 val sortedList = when (spinnerSort.selectedItemPosition) {
-                    1 -> payments.sortedByDescending { it.amount }
-                    2 -> payments.sortedBy { it.amount }
-                    else -> payments.sortedByDescending { it.date }
+                    1 -> filteredList.sortedByDescending { it.amount }
+                    2 -> filteredList.sortedBy { it.amount }
+                    else -> filteredList.sortedByDescending { it.date }
                 }
                 adapter.submitList(sortedList)
             }
@@ -110,7 +140,8 @@ class PaymentHistoryActivity : AppCompatActivity() {
         val spCategory = view.findViewById<Spinner>(R.id.spCategory)
 
         // 카테고리 스피너 설정
-        val categoryAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, categories)
+        val categoryAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, categories)
+        categoryAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         spCategory.adapter = categoryAdapter
         spCategory.setSelection(categories.indexOf("기타"))
 
@@ -152,7 +183,8 @@ class PaymentHistoryActivity : AppCompatActivity() {
         etAmount.setText(payment.amount.toString())
 
         // 카테고리 스피너 설정 및 기존 값 선택
-        val categoryAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, categories)
+        val categoryAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_item, categories)
+        categoryAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
         spCategory.adapter = categoryAdapter
         val categoryIndex = categories.indexOf(payment.category)
         if (categoryIndex >= 0) spCategory.setSelection(categoryIndex)

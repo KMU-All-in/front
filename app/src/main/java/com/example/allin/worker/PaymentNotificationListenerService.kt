@@ -47,8 +47,8 @@ class PaymentNotificationListenerService : NotificationListenerService() {
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
         val fullText = "$title $text"
 
-        // 1. 제외 키워드 체크 (광고 포함)
-        val excludeKeywords = listOf("입금", "환불", "취소", "입금완료", "(광고)", "광고")
+        // 1. 제외 키워드 체크 (광고/공동 계좌 알림 포함)
+        val excludeKeywords = listOf("입금", "환불", "취소", "입금완료", "(광고)", "광고", "모임통장", "모임 통장")
         if (excludeKeywords.any { fullText.contains(it) }) return
 
         // 2. 정교화된 금액 추출 호출
@@ -71,10 +71,26 @@ class PaymentNotificationListenerService : NotificationListenerService() {
     }
 
     private fun extractRealAmount(content: String): Int {
+        val paymentAmountPatterns = listOf(
+            Pattern.compile("([\\d,]+)\\s*원\\s*(?:카드)?(?:결제완료|결제|승인|사용|출금)"),
+            Pattern.compile("(?:결제완료|결제|승인|사용|출금)\\s*([\\d,]+)\\s*원")
+        )
+
+        for (pattern in paymentAmountPatterns) {
+            val matcher = pattern.matcher(content)
+            if (matcher.find()) {
+                return matcher.group(1)?.replace(",", "")?.toIntOrNull() ?: 0
+            }
+        }
+
         val wonPattern = Pattern.compile("([\\d,]+)\\s*원")
         val wonMatcher = wonPattern.matcher(content)
-        if (wonMatcher.find()) {
-            return wonMatcher.group(1).replace(",", "").toIntOrNull() ?: 0
+        while (wonMatcher.find()) {
+            val amountText = wonMatcher.group(1) ?: continue
+            val nearbyText = content.substring(wonMatcher.end(), minOf(content.length, wonMatcher.end() + 12))
+            if (!nearbyText.contains("캐시백")) {
+                return amountText.replace(",", "").toIntOrNull() ?: 0
+            }
         }
 
         val allNumbers = mutableListOf<String>()
@@ -100,10 +116,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
     private fun savePayment(content: String, title: String, amount: Int) {
         scope.launch {
             try {
-                val storeName = if (title.length in 2..12 && !title.contains("메시지")) title else {
-                    val parts = content.split(" ")
-                    if (parts.size > 1) "${parts[0]} ${parts[1]}" else parts[0]
-                }
+                val storeName = extractStoreName(content, title)
 
                 // 카테고리 자동 분류
                 val category = classifyCategory(storeName, content)
@@ -129,7 +142,10 @@ class PaymentNotificationListenerService : NotificationListenerService() {
         val lowerText = fullText.lowercase()
 
         return when {
-            listOf("마트", "편의점", "식당", "카페", "커피", "베이커리", "음식점", "배달", "치킨", "피자", "GS25", "CU", "세븐일레븐").any { lowerStore.contains(it) || lowerText.contains(it) } -> "식품/음료"
+            listOf(
+                "마트", "편의점", "식당", "카페", "커피", "베이커리", "음식점", "배달", "치킨", "피자",
+                "gs25", "cu", "세븐일레븐", "별차이나", "중식", "중국집", "반점", "마라", "짜장", "짬뽕"
+            ).any { lowerStore.contains(it) || lowerText.contains(it) } -> "식품/음료"
             listOf("백화점", "쇼핑", "몰", "의류", "패션", "무신사", "지그재그").any { lowerStore.contains(it) || lowerText.contains(it) } -> "패션/의류"
             listOf("올리브영", "화장품", "뷰티", "헤어", "미용실").any { lowerStore.contains(it) || lowerText.contains(it) } -> "뷰티/화장품"
             listOf("하이마트", "전자", "애플", "삼성", "컴퓨터").any { lowerStore.contains(it) || lowerText.contains(it) } -> "전자기기"
@@ -138,6 +154,64 @@ class PaymentNotificationListenerService : NotificationListenerService() {
             listOf("헬스", "축구", "스포츠", "레저", "골프").any { lowerStore.contains(it) || lowerText.contains(it) } -> "스포츠/레저"
             else -> "기타"
         }
+    }
+
+    private fun extractStoreName(content: String, title: String): String {
+        val directStorePatterns = listOf(
+            Pattern.compile("(?:가맹점|사용처|결제처)[:\\s]+([^\\n\\r]+)"),
+            Pattern.compile("([가-힣a-zA-Z0-9()._\\-\\s]+?)에서\\s*[\\d,]+\\s*원"),
+            Pattern.compile("[\\d,]+\\s*원\\s*(?:카드)?(?:결제완료|결제|승인|사용|출금)\\s+([^\\n\\r]+)")
+        )
+
+        for (pattern in directStorePatterns) {
+            val matcher = pattern.matcher(content)
+            if (matcher.find()) {
+                val candidate = cleanStoreName(matcher.group(1))
+                if (candidate.isNotBlank()) return candidate
+            }
+        }
+
+        val cleanTitle = cleanStoreName(title)
+        if (isLikelyStoreName(cleanTitle)) return cleanTitle
+
+        val parts = content.split(Regex("\\s+"))
+            .map { cleanStoreName(it) }
+            .filter { isLikelyStoreName(it) }
+
+        return parts.firstOrNull() ?: "알 수 없음"
+    }
+
+    private fun cleanStoreName(rawName: String?): String {
+        if (rawName.isNullOrBlank()) return ""
+        val stopWords = listOf("잔액", "누적", "승인번호", "일시불", "체크", "카드", "계좌", "알림")
+        var name = rawName
+            .replace(Regex("[\\[\\]]"), " ")
+            .replace(Regex("[\\d,]+\\s*원"), " ")
+            .replace(Regex("(결제완료|결제|승인|사용|출금)"), " ")
+            .trim()
+
+        for (stopWord in stopWords) {
+            val index = name.indexOf(stopWord)
+            if (index > 0) name = name.substring(0, index).trim()
+        }
+
+        return name.replace(Regex("\\s+"), " ").trim()
+    }
+
+    private fun isLikelyStoreName(name: String): Boolean {
+        if (name.length !in 2..25) return false
+        if (Pattern.compile("[\\d,]+\\s*원").matcher(name).find()) return false
+
+        val paymentWords = listOf("결제", "결제완료", "승인", "출금", "입금", "캐시백", "알림", "메시지")
+        if (paymentWords.any { name.contains(it) }) return false
+
+        val bankOrCardNames = listOf(
+            "토스뱅크", "토스", "카카오뱅크", "케이뱅크", "국민카드", "신한카드", "우리카드", "하나카드",
+            "현대카드", "삼성카드", "롯데카드", "농협", "기업은행", "우리은행", "하나은행", "신한은행", "국민은행"
+        )
+        if (bankOrCardNames.any { name.contains(it) }) return false
+
+        return true
     }
 
     private fun sendCompletionNotification(store: String, price: Int, category: String) {

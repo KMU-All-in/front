@@ -76,7 +76,7 @@ function classifyCategory(storeName, fullText = "") {
   const lowerText = String(fullText || "").toLowerCase();
   const check = (keywords) => keywords.some(kw => lowerStore.includes(kw) || lowerText.includes(kw));
 
-  if (check(["gs25", "cu", "세븐일레븐", "이마트24", "카페", "커피", "식당", "음식점", "배달", "치킨", "피자"])) return "식품/음료";
+  if (check(["gs25", "cu", "세븐일레븐", "이마트24", "카페", "커피", "식당", "음식점", "배달", "치킨", "피자", "별차이나", "중식", "중국집", "반점", "마라", "짜장", "짬뽕"])) return "식품/음료";
   if (check(["백화점", "쇼핑", "몰", "의류", "패션", "무신사", "지그재그"])) return "패션/의류";
   if (check(["올리브영", "화장품", "뷰티", "헤어", "미용실"])) return "뷰티/화장품";
   if (check(["하이마트", "전자", "애플", "삼성", "컴퓨터"])) return "전자기기";
@@ -87,8 +87,22 @@ function classifyCategory(storeName, fullText = "") {
 }
 
 function extractAmountFromText(content) {
-  const wonMatch = content.match(/([\d,]+)\s*원/);
-  if (wonMatch) return parseInt(wonMatch[1].replace(/,/g, ""), 10) || 0;
+  const paymentAmountPatterns = [
+    /([\d,]+)\s*원\s*(?:카드)?(?:결제완료|결제|승인|사용|출금)/,
+    /(?:결제완료|결제|승인|사용|출금)\s*([\d,]+)\s*원/
+  ];
+
+  for (const pattern of paymentAmountPatterns) {
+    const match = content.match(pattern);
+    if (match) return parseInt(match[1].replace(/,/g, ""), 10) || 0;
+  }
+
+  const wonMatches = [...content.matchAll(/([\d,]+)\s*원/g)];
+  for (const match of wonMatches) {
+    const nearbyText = content.slice(match.index + match[0].length, match.index + match[0].length + 12);
+    if (!nearbyText.includes("캐시백")) return parseInt(match[1].replace(/,/g, ""), 10) || 0;
+  }
+
   const numMatches = content.match(/[\d,]{3,}/g) || [];
   if (numMatches.length === 0) return 0;
   const withComma = numMatches.find(n => n.includes(","));
@@ -98,6 +112,65 @@ function extractAmountFromText(content) {
     if (notFourDigits.length > 0) return parseInt(notFourDigits[notFourDigits.length - 1], 10) || 0;
   }
   return parseInt(numMatches[numMatches.length - 1], 10) || 0;
+}
+
+function cleanStoreName(rawName) {
+  if (!rawName) return "";
+  const stopWords = ["잔액", "누적", "승인번호", "일시불", "체크", "카드", "계좌", "알림"];
+  let name = String(rawName)
+    .replace(/[\[\]]/g, " ")
+    .replace(/[\d,]+\s*원/g, " ")
+    .replace(/(결제완료|결제|승인|사용|출금)/g, " ")
+    .trim();
+
+  for (const stopWord of stopWords) {
+    const index = name.indexOf(stopWord);
+    if (index > 0) name = name.slice(0, index).trim();
+  }
+
+  return name.replace(/\s+/g, " ").trim();
+}
+
+function isLikelyStoreName(name) {
+  if (!name || name.length < 2 || name.length > 25) return false;
+  if (/[\d,]+\s*원/.test(name)) return false;
+
+  const paymentWords = ["결제", "결제완료", "승인", "출금", "입금", "캐시백", "알림", "메시지"];
+  if (paymentWords.some(word => name.includes(word))) return false;
+
+  const bankOrCardNames = [
+    "토스뱅크", "토스", "카카오뱅크", "케이뱅크", "국민카드", "신한카드", "우리카드", "하나카드",
+    "현대카드", "삼성카드", "롯데카드", "농협", "기업은행", "우리은행", "하나은행", "신한은행", "국민은행"
+  ];
+  if (bankOrCardNames.some(namePart => name.includes(namePart))) return false;
+
+  return true;
+}
+
+function extractStoreNameFromNotification(title, text, fullText) {
+  const patterns = [
+    /(?:가맹점|사용처|결제처)[:\s]+([^\n\r]+)/,
+    /([가-힣a-zA-Z0-9()._\-\s]+?)에서\s*[\d,]+\s*원/,
+    /[\d,]+\s*원\s*(?:카드)?(?:결제완료|결제|승인|사용|출금)\s+([^\n\r]+)/
+  ];
+
+  for (const pattern of patterns) {
+    const match = fullText.match(pattern);
+    if (match) {
+      const candidate = cleanStoreName(match[1]);
+      if (candidate) return candidate;
+    }
+  }
+
+  const cleanTitle = cleanStoreName(title);
+  if (isLikelyStoreName(cleanTitle)) return cleanTitle;
+
+  const fallback = String(text || fullText)
+    .split(/\s+/)
+    .map(cleanStoreName)
+    .find(isLikelyStoreName);
+
+  return fallback || "알 수 없음";
 }
 
 function pickBestCandidate(values, scoreFunction) {
@@ -172,7 +245,7 @@ exports.parseNotification = onCall((request) => {
   const fullText = `${title} ${text}`.trim();
   if (!fullText) throw new HttpsError("invalid-argument", "내용이 없습니다.");
 
-  const excludeKeywords = ["입금", "환불", "취소", "입금완료", "(광고)", "광고"];
+  const excludeKeywords = ["입금", "환불", "취소", "입금완료", "(광고)", "광고", "모임통장", "모임 통장"];
   if (excludeKeywords.some(kw => fullText.includes(kw))) return { success: false, reason: "excluded" };
 
   const payKeywords = ["승인", "결제", "일시불", "출금", "카드승인", "자동이체"];
@@ -181,9 +254,7 @@ exports.parseNotification = onCall((request) => {
   const amount = extractAmountFromText(fullText);
   if (amount <= 0) return { success: false, reason: "amount_not_found" };
 
-  let storeName = (title.length >= 2 && title.length <= 12 && !title.includes("메시지"))
-    ? title
-    : (text.split(/\s+/).slice(0, 2).join(" ") || "알 수 없음");
+  const storeName = extractStoreNameFromNotification(title, text, fullText);
 
   return {
     success: true,
