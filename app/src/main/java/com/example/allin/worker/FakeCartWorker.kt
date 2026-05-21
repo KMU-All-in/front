@@ -41,12 +41,22 @@ class FakeCartWorker(context: Context, params: WorkerParameters) : CoroutineWork
                 cal.add(Calendar.DAY_OF_YEAR, product.expiryDays)
                 val expiryTimestamp = cal.timeInMillis
 
-                // [수정] D-1 알림 로직 제거됨
+                // D-1 00:00 이후 알림 로직
+                val d1Timestamp = expiryTimestamp - TimeUnit.DAYS.toMillis(1)
+                if (now >= d1Timestamp && now < expiryTimestamp && !product.notifiedD1) {
+                    sendNotification(product.name, "내일 장바구니에서 삭제됩니다. 다시 생각해보세요!")
+
+                    // Firestore 업데이트 (D-1 알림 완료 표시)
+                    db.collection("users").document(uid).collection("fakecart")
+                        .document(product.id)
+                        .update("notifiedD1", true)
+                        .await()
+                }
 
                 // D-Day 12시 1분 알림 로직 (만료 당일 00:01 이후)
                 if (now >= expiryTimestamp + TimeUnit.MINUTES.toMillis(1) && !product.notifiedD0) {
                     sendNotification(product.name, "숙고 기간이 만료되었습니다! 삭제하시겠습니까, 유지하시겠습니까?")
-                    
+
                     // Firestore 업데이트 (당일 알림 완료 표시)
                     db.collection("users").document(uid).collection("fakecart")
                         .document(product.id)
@@ -79,10 +89,16 @@ class FakeCartWorker(context: Context, params: WorkerParameters) : CoroutineWork
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val notificationText = "'${productName}' $message"
+
         val notification = NotificationCompat.Builder(applicationContext, channelId)
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle("가짜 장바구니 알림")
-            .setContentText("'${productName}' $message")
+            .setContentText(notificationText)
+            .setStyle(
+                NotificationCompat.BigTextStyle()
+                    .bigText(notificationText)
+            )
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)

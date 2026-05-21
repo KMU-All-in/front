@@ -30,6 +30,15 @@ import java.text.DecimalFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
 
+/*
+테스트용 주석
+import androidx.work.Constraints
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import com.example.allin.worker.FakeCartWorker
+ */
+
 class FakeCartFragment : Fragment() {
 
     private lateinit var cartItemsContainer: LinearLayout
@@ -80,9 +89,26 @@ class FakeCartFragment : Fragment() {
         initViews(view)
         setupListeners(view)
         observeCartItems()
+        // 테스트용 주석
+        // runFakeCartWorkerForTest()
         view.post { selectTab(0) }
         return view
     }
+
+    /*
+    테스트용 주석
+    private fun runFakeCartWorkerForTest() {
+        val workRequest = OneTimeWorkRequestBuilder<FakeCartWorker>()
+            .setConstraints(
+                Constraints.Builder()
+                    .setRequiredNetworkType(NetworkType.CONNECTED)
+                    .build()
+            )
+            .build()
+
+        WorkManager.getInstance(requireContext()).enqueue(workRequest)
+    }
+     */
 
     private fun initViews(view: View) {
         cartItemsContainer = view.findViewById(R.id.cartItemsContainer)

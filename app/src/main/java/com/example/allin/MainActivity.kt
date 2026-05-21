@@ -24,6 +24,16 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.*
 
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
+import com.example.allin.worker.FakeCartWorker
+import java.util.concurrent.TimeUnit
+// 테스트주석
+// import androidx.work.OneTimeWorkRequestBuilder
+
 class MainActivity : AppCompatActivity() {
 
     private lateinit var fakeCartRepository: FakeCartRepository
@@ -48,8 +58,33 @@ class MainActivity : AppCompatActivity() {
         setupBackPress()
         handleIntent(intent)
 
+        scheduleFakeCartExpiryCheck()
+
         // [핵심] 앱 시작 시 만료 상품 즉시 체크
         checkFakeCartExpirations()
+
+    }
+
+    private fun scheduleFakeCartExpiryCheck() {
+
+        /*
+        테스트용 주석
+        val testWorkRequest = OneTimeWorkRequestBuilder<FakeCartWorker>()
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .build()
+
+        WorkManager.getInstance(this).enqueue(testWorkRequest)
+        */
+
+        val workRequest = PeriodicWorkRequestBuilder<FakeCartWorker>(1, TimeUnit.HOURS)
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .build()
+
+        WorkManager.getInstance(this).enqueueUniquePeriodicWork(
+            "FakeCartExpiryWork",
+            ExistingPeriodicWorkPolicy.UPDATE,
+            workRequest
+        )
     }
 
     private fun checkFakeCartExpirations() {
