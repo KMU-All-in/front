@@ -3,7 +3,6 @@ package com.example.allin
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
-import android.widget.Button
 import android.widget.TextView
 import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.ListAdapter
@@ -36,8 +35,9 @@ class PaymentAdapter(
         private val tvAmount: TextView = itemView.findViewById(R.id.tvAmount)
         private val tvDate: TextView = itemView.findViewById(R.id.tvDate)
         private val tvCategory: TextView = itemView.findViewById(R.id.tvCategory)
-        private val btnEdit: Button = itemView.findViewById(R.id.btnEdit)
-        private val btnDelete: Button = itemView.findViewById(R.id.btnDelete)
+        // [수정] Button -> TextView로 변경 (XML과 일치시킴)
+        private val btnEdit: TextView = itemView.findViewById(R.id.btnEdit)
+        private val btnDelete: TextView = itemView.findViewById(R.id.btnDelete)
 
         fun bind(payment: Payment) {
             tvStoreName.text = payment.storeName

@@ -35,7 +35,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="15,000원"
-                android:textColor="@color/purple_500"
+                android:textColor="#6200EE"
                 android:textSize="18sp"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -69,22 +69,28 @@
             android:gravity="end"
             android:orientation="horizontal">
 
-            <Button
+            <!-- [수정] 버튼 역할의 TextView -->
+            <TextView
                 android:id="@+id/btnEdit"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:padding="8dp"
                 android:text="수정"
-                android:textSize="12sp" />
+                android:textColor="#6200EE"
+                android:textSize="14sp"
+                android:textStyle="bold" />
 
-            <Button
+            <!-- [삭제] 버튼 역할의 TextView -->
+            <TextView
                 android:id="@+id/btnDelete"
-                style="@style/Widget.MaterialComponents.Button.TextButton"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="16dp"
+                android:padding="8dp"
                 android:text="삭제"
-                android:textColor="@android:color/holo_red_dark"
-                android:textSize="12sp" />
+                android:textColor="#D32F2F"
+                android:textSize="14sp"
+                android:textStyle="bold" />
         </LinearLayout>
     </LinearLayout>
 </androidx.cardview.widget.CardView>
