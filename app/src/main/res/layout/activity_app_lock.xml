@@ -6,18 +6,20 @@
     android:orientation="vertical"
     android:background="#FFFFFF">
 
-    <!-- Top Bar -->
     <RelativeLayout
         android:layout_width="match_parent"
-        android:layout_height="60dp"
+        android:layout_height="76dp"
         android:paddingHorizontal="20dp">
+
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="쇼핑 앱 잠금"
+            android:textColor="#424A5C"
             android:textSize="18sp"
             android:textStyle="bold"
             android:layout_centerVertical="true" />
+
         <ImageButton
             android:id="@+id/btnMoreOptions"
             android:layout_width="40dp"
@@ -29,21 +31,21 @@
             app:tint="@android:color/black" />
     </RelativeLayout>
 
-    <!-- A1: Main Switch -->
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:padding="20dp"
+        android:layout_height="94dp"
+        android:paddingHorizontal="28dp"
         android:gravity="center_vertical"
-        android:background="#F8F9FA">
+        android:background="@drawable/bg_app_lock_switch_section">
+
         <TextView
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
             android:text="잠금 기능 사용"
             android:textSize="16sp"
-            android:textColor="@android:color/black"
-            android:textStyle="bold" />
+            android:textColor="#232B3A" />
+
         <androidx.appcompat.widget.SwitchCompat
             android:id="@+id/swMainLock"
             android:layout_width="wrap_content"
@@ -54,30 +56,32 @@
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1">
-        
+
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical">
 
-            <!-- A4: Change Password -->
             <LinearLayout
                 android:id="@+id/btnChangePassword"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:padding="20dp"
+                android:layout_height="70dp"
+                android:paddingHorizontal="28dp"
                 android:clickable="true"
                 android:focusable="true"
                 android:background="?attr/selectableItemBackground"
                 android:gravity="center_vertical">
+
                 <ImageView
                     android:layout_width="24dp"
                     android:layout_height="24dp"
                     android:src="@android:drawable/ic_lock_idle_lock"
                     app:tint="#4F6FFF" />
+
                 <TextView
-                    android:layout_width="wrap_content"
+                    android:layout_width="0dp"
                     android:layout_height="wrap_content"
+                    android:layout_weight="1"
                     android:layout_marginStart="16dp"
                     android:text="잠금 비밀번호 변경"
                     android:textSize="14sp"
@@ -88,27 +92,32 @@
                 android:layout_width="match_parent"
                 android:layout_height="1dp"
                 android:background="#EEEEEE"
-                android:layout_marginHorizontal="20dp" />
+                android:layout_marginHorizontal="28dp" />
 
-            <!-- Locked App List Label -->
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="잠금된 앱 리스트"
                 android:textSize="14sp"
                 android:textColor="#9E9E9E"
-                android:layout_margin="20dp" />
+                android:layout_marginHorizontal="28dp"
+                android:layout_marginTop="22dp"
+                android:layout_marginBottom="12dp" />
 
             <androidx.recyclerview.widget.RecyclerView
                 android:id="@+id/rvLockedApps"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:nestedScrollingEnabled="false" />
-                
+                android:background="@drawable/bg_app_lock_list_panel"
+                android:clipToPadding="false"
+                android:nestedScrollingEnabled="false"
+                android:paddingHorizontal="24dp"
+                android:paddingTop="18dp"
+                android:paddingBottom="96dp" />
+
         </LinearLayout>
     </ScrollView>
 
-    <!-- Add Button -->
     <com.google.android.material.floatingactionbutton.FloatingActionButton
         android:id="@+id/btnAddApp"
         android:layout_width="wrap_content"

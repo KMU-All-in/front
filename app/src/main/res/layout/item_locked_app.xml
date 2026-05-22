@@ -1,24 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
+    android:layout_height="72dp"
     android:orientation="horizontal"
-    android:padding="12dp"
-    android:gravity="center_vertical">
+    android:layout_marginBottom="16dp"
+    android:background="@drawable/bg_locked_app_item"
+    android:elevation="1dp"
+    android:gravity="center_vertical"
+    android:paddingHorizontal="18dp">
 
     <ImageView
         android:id="@+id/ivAppIcon"
-        android:layout_width="40dp"
-        android:layout_height="40dp"
-        android:layout_marginEnd="16dp" />
+        android:layout_width="34dp"
+        android:layout_height="34dp"
+        android:layout_marginEnd="14dp" />
 
     <TextView
         android:id="@+id/tvAppName"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:textSize="16sp"
-        android:textColor="@android:color/black" />
+        android:textColor="#6E7280"
+        android:textSize="15sp" />
 
     <androidx.appcompat.widget.SwitchCompat
         android:id="@+id/swItemLock"
