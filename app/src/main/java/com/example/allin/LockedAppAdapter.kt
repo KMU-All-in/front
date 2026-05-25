@@ -13,11 +13,12 @@ import androidx.recyclerview.widget.RecyclerView
 data class LockedApp(
     val packageName: String,
     val name: String,
-    val icon: Drawable
+    val icon: Drawable,
+    val isActive: Boolean = true
 )
 
 class LockedAppAdapter(
-    private var apps: List<LockedApp>,
+    var apps: List<LockedApp> = emptyList(),
     private val onToggle: (String, Boolean) -> Unit
 ) : RecyclerView.Adapter<LockedAppAdapter.ViewHolder>() {
 
@@ -35,8 +36,8 @@ class LockedAppAdapter(
         val app = apps[position]
         holder.ivIcon.setImageDrawable(app.icon)
         holder.tvName.text = app.name
-        holder.swLock.isChecked = true // 리스트에 있다는 건 잠겨있다는 뜻
-
+        holder.swLock.setOnCheckedChangeListener(null)
+        holder.swLock.isChecked = app.isActive
         holder.swLock.setOnCheckedChangeListener { _, isChecked ->
             onToggle(app.packageName, isChecked)
         }

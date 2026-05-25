@@ -63,11 +63,9 @@ class AppLockActivity : AppCompatActivity() {
     }
 
     private fun setupRecyclerView() {
-        adapter = LockedAppAdapter(emptyList()) { packageName, isLocked ->
-            if (!isLocked) {
-                lifecycleScope.launch {
-                    repository.removeLockedApp(packageName)
-                }
+        adapter = LockedAppAdapter(emptyList()) { packageName, isActive ->
+            lifecycleScope.launch {
+                repository.updateLockedAppStatus(packageName, isActive)  // 삭제 대신 상태 업데이트!
             }
         }
         rvLockedApps.layoutManager = LinearLayoutManager(this)
@@ -117,13 +115,24 @@ class AppLockActivity : AppCompatActivity() {
                         com.example.allin.LockedApp(
                             packageName = dbApp.packageName,
                             name = appInfo.loadLabel(pm).toString(),
-                            icon = appInfo.loadIcon(pm)
+                            icon = appInfo.loadIcon(pm),
+                            isActive = dbApp.isActive
                         )
                     } catch (e: Exception) {
                         null
                     }
                 }
-                adapter.updateData(uiModels)
+                val oldApps = adapter.apps
+                adapter.apps = uiModels
+                if (oldApps.size != uiModels.size) {
+                    adapter.notifyDataSetChanged()
+                } else {
+                    for (i in uiModels.indices) {
+                        if (oldApps[i].isActive != uiModels[i].isActive) {
+                            adapter.notifyItemChanged(i)
+                        }
+                    }
+                }
             }
         }
     }
