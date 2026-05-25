@@ -3,11 +3,11 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="@drawable/bg_lock_screen"
     android:orientation="vertical"
-    android:background="#CFDCFF"
-    android:paddingHorizontal="28dp"
-    android:paddingTop="52dp"
-    android:paddingBottom="24dp">
+    android:paddingHorizontal="22dp"
+    android:paddingTop="28dp"
+    android:paddingBottom="18dp">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -17,98 +17,149 @@
         android:orientation="vertical">
 
         <FrameLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
+            android:layout_width="150dp"
+            android:layout_height="150dp"
             android:layout_marginTop="0dp">
 
-            <TextView
-                android:id="@+id/tvLockAdvice"
-                android:layout_width="300dp"
-                android:layout_height="76dp"
-                android:layout_gravity="center_horizontal"
-                android:background="@drawable/bg_lock_speech"
-                android:gravity="center"
-                android:textAlignment="center"
-                android:paddingStart="18dp"
-                android:paddingEnd="18dp"
-                android:paddingTop="6dp"
-                android:paddingBottom="20dp"
-                android:text="잠깐! 저는 쇼핑 앱 감지 경찰입니다.\n정말 필요한 물건인가요?"
-                android:textColor="#596273"
-                android:textSize="13sp"
-                android:textStyle="bold" />
-        </FrameLayout>
+            <View
+                android:layout_width="150dp"
+                android:layout_height="150dp"
+                android:layout_gravity="center"
+                android:background="@drawable/bg_lock_icon_glow" />
 
-        <ImageView
-            android:id="@+id/ivLockCharacter"
-            android:layout_width="150dp"
-            android:layout_height="170dp"
-            android:layout_marginTop="20dp"
-            android:background="@drawable/bg_lock_image_area"
-            android:padding="34dp"
-            android:alpha="0.55"
-            android:src="@android:drawable/ic_menu_help"
-            app:tint="#8FAAF5" />
+            <ImageView
+                android:id="@+id/ivLockCharacter"
+                android:layout_width="128dp"
+                android:layout_height="128dp"
+                android:layout_gravity="center"
+                android:src="@drawable/icon_lock_main" />
+        </FrameLayout>
 
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="앱 잠금 해제"
-            android:textColor="#4F5F8A"
-            android:textSize="22sp"
-            android:textStyle="bold"
-            android:layout_marginTop="14dp" />
+            android:layout_marginTop="10dp"
+            android:gravity="center"
+            android:lineSpacingExtra="2dp"
+            android:text="잠깐! 구매할 물건\n 확인 하셨나요?"
+            android:textColor="#334566"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="설정한 비밀번호를 입력해주세요"
+            android:textColor="#667797"
+            android:textSize="13sp" />
+
+        <!-- LockActivity.kt에서 tvLockAdvice를 찾기 때문에 ID만 숨겨서 유지합니다. -->
+        <TextView
+            android:id="@+id/tvLockAdvice"
+            android:layout_width="1dp"
+            android:layout_height="1dp"
+            android:alpha="0"
+            android:text="" />
 
         <LinearLayout
             android:id="@+id/pinIndicatorContainer"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="18dp"
+            android:layout_marginTop="14dp"
             android:orientation="horizontal">
 
-            <View android:layout_width="18dp" android:layout_height="18dp" android:layout_marginHorizontal="9dp" android:background="@drawable/pin_dot_off" />
-            <View android:layout_width="18dp" android:layout_height="18dp" android:layout_marginHorizontal="9dp" android:background="@drawable/pin_dot_off" />
-            <View android:layout_width="18dp" android:layout_height="18dp" android:layout_marginHorizontal="9dp" android:background="@drawable/pin_dot_off" />
-            <View android:layout_width="18dp" android:layout_height="18dp" android:layout_marginHorizontal="9dp" android:background="@drawable/pin_dot_off" />
+            <View
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:layout_marginHorizontal="8dp"
+                android:background="@drawable/pin_dot_off" />
+
+            <View
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:layout_marginHorizontal="8dp"
+                android:background="@drawable/pin_dot_off" />
+
+            <View
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:layout_marginHorizontal="8dp"
+                android:background="@drawable/pin_dot_off" />
+
+            <View
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:layout_marginHorizontal="8dp"
+                android:background="@drawable/pin_dot_off" />
         </LinearLayout>
     </LinearLayout>
 
     <GridLayout
-        android:layout_width="match_parent"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginBottom="6dp"
+        android:layout_gravity="center_horizontal"
+        android:alignmentMode="alignMargins"
         android:columnCount="3"
-        android:rowCount="4">
+        android:gravity="center"
+        android:rowCount="4"
+        android:useDefaultMargins="false">
 
-        <Button style="@style/KeypadButton" android:text="1" />
-        <Button style="@style/KeypadButton" android:text="2" />
-        <Button style="@style/KeypadButton" android:text="3" />
+        <Button
+            style="@style/KeypadButton"
+            android:text="1" />
 
-        <Button style="@style/KeypadButton" android:text="4" />
-        <Button style="@style/KeypadButton" android:text="5" />
-        <Button style="@style/KeypadButton" android:text="6" />
+        <Button
+            style="@style/KeypadButton"
+            android:text="2" />
 
-        <Button style="@style/KeypadButton" android:text="7" />
-        <Button style="@style/KeypadButton" android:text="8" />
-        <Button style="@style/KeypadButton" android:text="9" />
+        <Button
+            style="@style/KeypadButton"
+            android:text="3" />
 
-        <View
-            android:layout_width="0dp"
-            android:layout_height="0dp"
-            android:layout_columnWeight="1" />
+        <Button
+            style="@style/KeypadButton"
+            android:text="4" />
 
-        <Button style="@style/KeypadButton" android:text="0" />
+        <Button
+            style="@style/KeypadButton"
+            android:text="5" />
+
+        <Button
+            style="@style/KeypadButton"
+            android:text="6" />
+
+        <Button
+            style="@style/KeypadButton"
+            android:text="7" />
+
+        <Button
+            style="@style/KeypadButton"
+            android:text="8" />
+
+        <Button
+            style="@style/KeypadButton"
+            android:text="9" />
+
+        <Space
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:layout_margin="7dp" />
+
+        <Button
+            style="@style/KeypadButton"
+            android:text="0" />
 
         <ImageButton
             android:id="@+id/btnBackspace"
-            android:layout_width="0dp"
-            android:layout_height="64dp"
-            android:layout_columnWeight="1"
-            android:layout_margin="3dp"
-            android:background="@drawable/bg_lock_key"
-            android:padding="18dp"
+            android:layout_width="72dp"
+            android:layout_height="72dp"
+            android:layout_margin="7dp"
+            android:background="@drawable/bg_lock_key_circle"
+            android:elevation="7dp"
+            android:padding="22dp"
             android:src="@android:drawable/ic_input_delete"
-            app:tint="#8FAAF5" />
+            app:tint="#5C86F5" />
     </GridLayout>
 
 </LinearLayout>
