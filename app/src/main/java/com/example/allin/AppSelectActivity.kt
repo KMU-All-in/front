@@ -128,7 +128,18 @@ class AppSelectActivity : AppCompatActivity() {
 
         lifecycleScope.launch {
             try {
-                repository.updateAllLockedApps(selectedApps.map { LockedApp(it.packageName, it.name) })
+                val existingStates = repository.allLockedApps.first()
+                    .associate { it.packageName to it.isActive }
+
+                repository.updateAllLockedApps(
+                    selectedApps.map {
+                        LockedApp(
+                            packageName = it.packageName,
+                            appName = it.name,
+                            isActive = existingStates[it.packageName] ?: true
+                        )
+                    }
+                )
                 withContext(Dispatchers.Main) {
                     loadingProgress.visibility = View.GONE
                     Toast.makeText(this@AppSelectActivity, "저장 완료!", Toast.LENGTH_SHORT).show()

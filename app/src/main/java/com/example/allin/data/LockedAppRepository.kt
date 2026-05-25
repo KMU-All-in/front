@@ -94,5 +94,29 @@ class LockedAppRepository(private val lockedAppDao: LockedAppDao) {
         if (lockedApp != null) {
             lockedAppDao.updateLockedApp(lockedApp.copy(isActive = isActive))
         }
+
+        val currentUser = auth.currentUser ?: return
+        try {
+            val docRef = db.collection("users").document(currentUser.uid)
+            db.runTransaction { transaction ->
+                val snapshot = transaction.get(docRef)
+                val currentAppStates = when (val lockedApps = snapshot.get("locked_apps")) {
+                    is Map<*, *> -> lockedApps.mapNotNull { (key, value) ->
+                        val appPackage = key as? String ?: return@mapNotNull null
+                        appPackage to (value as? Boolean ?: true)
+                    }.toMap().toMutableMap()
+                    is List<*> -> lockedApps.mapNotNull { it as? String }
+                        .associateWith { true }
+                        .toMutableMap()
+                    else -> mutableMapOf()
+                }
+
+                currentAppStates[packageName] = isActive
+                transaction.set(docRef, mapOf("locked_apps" to currentAppStates), SetOptions.merge())
+            }.await()
+            Log.d("LockedAppRepository", "App status synced: $packageName -> $isActive")
+        } catch (e: Exception) {
+            Log.e("LockedAppRepository", "Firestore sync status failed", e)
+        }
     }
 }
