@@ -67,9 +67,7 @@
             android:padding="20dp" />
     </ScrollView>
 
-
-
-    <!-- 배경 어둡게 및 팝업 (기존 코드 유지) -->
+    <!-- 배경 어둡게 및 팝업 -->
     <View android:id="@+id/dimView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
@@ -86,11 +84,9 @@
         android:layout_margin="24dp"
         android:visibility="gone"
         app:cardCornerRadius="24dp"
-
         android:clickable="true"
         android:focusable="true"
-        android:elevation="12dp"
-        android:translationZ="12dp">
+        android:elevation="12dp">
 
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="24dp">
             <RelativeLayout android:layout_width="match_parent" android:layout_height="wrap_content">
@@ -102,6 +98,10 @@
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="사진 변경 (자동 인식)" android:textSize="12sp" android:textColor="#4F6FFF"/>
             </LinearLayout>
             <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:orientation="vertical">
+                <!-- URL 필드 숨김 처리 -->
+                <TextView android:id="@+id/tvEditUrlLabel" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="상품 URL" android:textSize="12sp" android:textStyle="bold" android:textColor="@android:color/black" android:layout_marginBottom="4dp" android:visibility="gone"/>
+                <EditText android:id="@+id/etEditUrl" android:layout_width="match_parent" android:layout_height="50dp" android:background="#F2F4F8" android:paddingStart="12dp" android:textColor="#000000" android:layout_marginBottom="12dp" android:hint="https://..." android:visibility="gone"/>
+                
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="상품명" android:textSize="12sp" android:textStyle="bold" android:textColor="@android:color/black" android:layout_marginBottom="4dp"/>
                 <EditText android:id="@+id/etEditName" android:layout_width="match_parent" android:layout_height="50dp" android:background="#F2F4F8" android:paddingStart="12dp" android:textColor="#000000" android:layout_marginBottom="12dp" android:hint="상품명 입력"/>
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="가격(원)" android:textSize="12sp" android:textStyle="bold" android:textColor="@android:color/black" android:layout_marginBottom="4dp"/>
@@ -119,11 +119,9 @@
         android:layout_margin="24dp"
         android:visibility="gone"
         app:cardCornerRadius="24dp"
-
         android:clickable="true"
         android:focusable="true"
-        android:elevation="12dp"
-        android:translationZ="12dp">
+        android:elevation="12dp">
 
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="24dp">
             <RelativeLayout android:layout_width="match_parent" android:layout_height="wrap_content">
@@ -135,10 +133,13 @@
                 <Button android:id="@+id/tabPhoto" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:layout_marginHorizontal="4dp" android:text="사진" android:textSize="12sp" android:backgroundTint="#F2F4F8" android:textColor="#666666" app:cornerRadius="8dp" android:insetTop="0dp" android:insetBottom="0dp" style="@style/Widget.MaterialComponents.Button.UnelevatedButton"/>
                 <Button android:id="@+id/tabManual" android:layout_width="0dp" android:layout_height="match_parent" android:layout_weight="1" android:layout_marginStart="4dp" android:text="직접 입력" android:textSize="12sp" android:backgroundTint="#F2F4F8" android:textColor="#666666" app:cornerRadius="8dp" android:insetTop="0dp" android:insetBottom="0dp" style="@style/Widget.MaterialComponents.Button.UnelevatedButton"/>
             </LinearLayout>
+
+            <!-- 공용 URL 입력 필드 -->
             <LinearLayout android:id="@+id/layoutUrlInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:orientation="vertical">
-                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="상품 URL" android:textColor="@android:color/black" android:textSize="12sp" android:textStyle="bold" />
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="상품 URL (선택)" android:textColor="@android:color/black" android:textSize="12sp" android:textStyle="bold" />
                 <EditText android:id="@+id/etUrlInput" android:layout_width="match_parent" android:layout_height="50dp" android:layout_marginTop="8dp" android:background="#F2F4F8" android:hint="https://example.com/product" android:inputType="text" android:paddingStart="12dp" android:textColor="#000000" />
             </LinearLayout>
+
             <LinearLayout android:id="@+id/layoutPhotoInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:visibility="gone" android:orientation="vertical" android:gravity="center">
                 <ImageView android:id="@+id/ivPhotoPreview" android:layout_width="100dp" android:layout_height="100dp" android:src="@android:drawable/ic_menu_camera" app:tint="#CCCCCC" />
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="사진 촬영 또는 갤러리 선택" android:textSize="12sp" android:textColor="#9E9E9E"/>
@@ -147,8 +148,10 @@
                 <EditText android:id="@+id/etManualName" android:layout_width="match_parent" android:layout_height="50dp" android:hint="상품명" android:inputType="text" android:background="#F2F4F8" android:paddingStart="12dp" android:textColor="#000000" android:layout_marginBottom="8dp"/>
                 <EditText android:id="@+id/etManualPrice" android:layout_width="match_parent" android:layout_height="50dp" android:hint="가격(원)" android:inputType="number" android:background="#F2F4F8" android:paddingStart="12dp" android:textColor="#000000"/>
             </LinearLayout>
+            
             <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="20dp" android:text="삭제까지 남은 기간" android:textSize="12sp" android:textStyle="bold" android:textColor="@android:color/black"/>
             <Spinner android:id="@+id/spExpiry" android:layout_width="match_parent" android:layout_height="50dp" android:layout_marginTop="8dp" android:background="#F2F4F8" />
+            
             <Button android:id="@+id/btnSubmit" android:layout_width="match_parent" android:layout_height="55dp" android:layout_marginTop="24dp" android:backgroundTint="#4F6FFF" android:text="장바구니에 담기" android:textColor="@android:color/white" app:cornerRadius="12dp" />
         </LinearLayout>
     </androidx.cardview.widget.CardView>
@@ -161,11 +164,9 @@
         android:layout_margin="24dp"
         android:visibility="gone"
         app:cardCornerRadius="24dp"
-
         android:clickable="true"
         android:focusable="true"
-        android:elevation="12dp"
-        android:translationZ="12dp">
+        android:elevation="12dp">
 
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="24dp">
             <RelativeLayout android:layout_width="match_parent" android:layout_height="wrap_content">

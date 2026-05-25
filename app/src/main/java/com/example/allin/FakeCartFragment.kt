@@ -30,15 +30,6 @@ import java.text.DecimalFormat
 import java.util.*
 import java.util.concurrent.TimeUnit
 
-/*
-테스트용 주석
-import androidx.work.Constraints
-import androidx.work.NetworkType
-import androidx.work.OneTimeWorkRequestBuilder
-import androidx.work.WorkManager
-import com.example.allin.worker.FakeCartWorker
- */
-
 class FakeCartFragment : Fragment() {
 
     private lateinit var cartItemsContainer: LinearLayout
@@ -57,6 +48,7 @@ class FakeCartFragment : Fragment() {
     private lateinit var etUrlInput: EditText
     private lateinit var etManualName: EditText
     private lateinit var etManualPrice: EditText
+    private lateinit var etEditUrl: EditText
     private lateinit var etEditName: EditText
     private lateinit var etEditPrice: EditText
     private lateinit var spExpiry: Spinner
@@ -89,26 +81,9 @@ class FakeCartFragment : Fragment() {
         initViews(view)
         setupListeners(view)
         observeCartItems()
-        // 테스트용 주석
-        // runFakeCartWorkerForTest()
         view.post { selectTab(0) }
         return view
     }
-
-    /*
-    테스트용 주석
-    private fun runFakeCartWorkerForTest() {
-        val workRequest = OneTimeWorkRequestBuilder<FakeCartWorker>()
-            .setConstraints(
-                Constraints.Builder()
-                    .setRequiredNetworkType(NetworkType.CONNECTED)
-                    .build()
-            )
-            .build()
-
-        WorkManager.getInstance(requireContext()).enqueue(workRequest)
-    }
-     */
 
     private fun initViews(view: View) {
         cartItemsContainer = view.findViewById(R.id.cartItemsContainer)
@@ -130,8 +105,11 @@ class FakeCartFragment : Fragment() {
         etUrlInput = view.findViewById(R.id.etUrlInput)
         etManualName = view.findViewById(R.id.etManualName)
         etManualPrice = view.findViewById(R.id.etManualPrice)
+        
+        etEditUrl = view.findViewById(R.id.etEditUrl)
         etEditName = view.findViewById(R.id.etEditName)
         etEditPrice = view.findViewById(R.id.etEditPrice)
+        
         spExpiry = view.findViewById(R.id.spExpiry)
         btnSubmit = view.findViewById(R.id.btnSubmit)
         btnSubmitEdit = view.findViewById(R.id.btnSubmitEdit)
@@ -178,7 +156,7 @@ class FakeCartFragment : Fragment() {
         tabManual.backgroundTintList = ColorStateList.valueOf(if (index == 2) activeBg else inactiveBg)
         tabManual.setTextColor(if (index == 2) activeTextColor else inactiveTextColor)
 
-        layoutUrlInput.visibility = if (index == 0) View.VISIBLE else View.GONE
+        // URL 입력은 이제 항상 보이므로 생략
         layoutPhotoInput.visibility = if (index == 1) View.VISIBLE else View.GONE
         layoutManualInput.visibility = if (index == 2) View.VISIBLE else View.GONE
     }
@@ -186,7 +164,6 @@ class FakeCartFragment : Fragment() {
     private fun observeCartItems() {
         viewLifecycleOwner.lifecycleScope.launch {
             repository.allProducts.collect { products ->
-                // 만료 체크 로직은 이제 MainActivity에서만 수행하므로 삭제했습니다.
                 renderCartItems(products)
             }
         }
@@ -225,6 +202,35 @@ class FakeCartFragment : Fragment() {
             itemView.findViewById<TextView>(R.id.tvReasonsSummary)?.text = reasonsText
 
             itemView.findViewById<Button>(R.id.btnAddReason)?.setOnClickListener { showAddReasonPopup(product) }
+
+            // [추가] 리스트 아이템 터치 시 URL 이동/복사 로직
+            itemView.setOnClickListener {
+                val isDDay = diffInDays <= 0
+                val reasonCount = product.reasons.size
+                val hasEnoughReasons = reasonCount >= 5
+
+                if ((isDDay || hasEnoughReasons) && product.url.isNotEmpty()) {
+                    try {
+                        val url = if (!product.url.startsWith("http")) "https://${product.url}" else product.url
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                        startActivity(intent)
+                    } catch (e: Exception) {
+                        // 이동 실패 시 클립보드 복사
+                        val clipboard = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        val clip = android.content.ClipData.newPlainText("Product URL", product.url)
+                        clipboard.setPrimaryClip(clip)
+                        Toast.makeText(requireContext(), "브라우저 연결이 어려워 주소를 복사했습니다.", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    if (product.url.isEmpty()) {
+                        Toast.makeText(requireContext(), "연결할 주소가 저장되어 있지 않습니다.", Toast.LENGTH_SHORT).show()
+                    } else {
+                        val message = "숙고가 부족합니다! (남은 기간: ${if(diffInDays > 0) diffInDays else 0}일 또는 남은 이유: ${5 - reasonCount}개)"
+                        Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+
             itemView.findViewById<ImageButton>(R.id.btnOptions)?.setOnClickListener { v ->
                 val popup = PopupMenu(requireContext(), v)
                 popup.menu.add("수정")
@@ -262,6 +268,8 @@ class FakeCartFragment : Fragment() {
         cardEditProduct.visibility = View.VISIBLE
         dimView.bringToFront()
         cardEditProduct.bringToFront()
+        
+        etEditUrl.setText(product.url)
         etEditName.setText(product.name)
         etEditPrice.setText(product.price.toString())
         Glide.with(this).load(product.imageUrl).into(ivEditPhotoPreview)
@@ -271,6 +279,8 @@ class FakeCartFragment : Fragment() {
         val product = editingProduct ?: return
         viewLifecycleOwner.lifecycleScope.launch {
             val updatedProduct = product.copy(
+                // 사용자가 확인/수정하지 못하도록 기존 URL을 그대로 유지
+                url = product.url,
                 name = etEditName.text.toString().trim().ifEmpty { product.name },
                 price = etEditPrice.text.toString().toIntOrNull() ?: product.price,
                 imageUrl = selectedImageUri?.toString() ?: product.imageUrl
@@ -307,24 +317,18 @@ class FakeCartFragment : Fragment() {
             val url = etUrlInput.text.toString().trim()
             var imageUrl = ""
             val expiryDays = when(spExpiry.selectedItemPosition) {
-                0 -> 1
-                1 -> 3
-                2 -> 7
-                3 -> 14
-                4 -> 30
-                else -> 7
+                0 -> 1; 1 -> 3; 2 -> 7; 3 -> 14; 4 -> 30; else -> 7
             }
 
-            if (currentTabIndex == 0 && url.isNotEmpty()) {
+            if (url.isNotEmpty()) {
                 try {
-                    withContext(Dispatchers.IO) {
-                        val doc = Jsoup.connect(url).userAgent("Mozilla/5.0").timeout(5000).get()
-                        name = doc.select("meta[property=og:title]").attr("content").ifEmpty { doc.title().split(":")[0].trim() }
-                        imageUrl = doc.select("meta[property=og:image]").attr("content")
-                        val priceStr = doc.select("meta[property=product:price:amount]").attr("content")
-                        if (priceStr.isNotEmpty()) price = priceStr.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 0
-                    }
-                } catch (e: Exception) { Log.e("FakeCart", "Jsoup error", e) }
+                    val parsed = ProductParser.parse(url)
+                    name = if (name.isEmpty()) (parsed.name ?: "") else name
+                    price = if (price == 0) (parsed.price ?: 0) else price
+                    imageUrl = parsed.imageUrl ?: ""
+                } catch (e: Exception) {
+                    Log.e("FakeCart", "Parsing error", e)
+                }
             }
 
             val product = FakeProduct(

@@ -42,9 +42,10 @@ class BudgetSetupActivity : AppCompatActivity() {
     private lateinit var tvCategoryLabel: TextView
     private lateinit var llCategoryList: LinearLayout
     private lateinit var btnOpenAddPlanBottom: Button
+    private lateinit var btnManageHistory: Button
 
     private val categories = arrayOf("패션/의류", "뷰티/화장품", "전자기기", "도서/문구", "식품/음료", "생활용품", "스포츠/레저", "기타")
-    
+
     private val db = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
 
@@ -87,6 +88,7 @@ class BudgetSetupActivity : AppCompatActivity() {
         tvCategoryLabel = findViewById(R.id.tvCategoryLabel)
         llCategoryList = findViewById(R.id.llCategoryList)
         btnOpenAddPlanBottom = findViewById(R.id.btnOpenAddPlanBottom)
+        btnManageHistory = findViewById(R.id.btnManageHistory)
 
         val adapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, categories)
         spCategory.adapter = adapter
@@ -105,9 +107,12 @@ class BudgetSetupActivity : AppCompatActivity() {
         findViewById<ImageView>(R.id.btnEditBudget).setOnClickListener { showAddPlanPopup() }
         findViewById<ImageView>(R.id.btnDeleteBudget).setOnClickListener { deletePlan() }
 
+        btnManageHistory.setOnClickListener {
+            startActivity(Intent(this, PaymentHistoryActivity::class.java))
+        }
+
         btnSaveBudget.setOnClickListener { saveData() }
     }
-
     private fun showAddPlanPopup() {
         tvPopupTitle.text = "이번 주 계획 추가"
         tvLabel1.text = "이번 주 총 예산"
@@ -266,12 +271,14 @@ class BudgetSetupActivity : AppCompatActivity() {
             tvCategoryLabel.visibility = View.GONE
             llCategoryList.visibility = View.GONE
             btnOpenAddPlanBottom.visibility = View.GONE
+            btnManageHistory.visibility = View.GONE
         } else {
             cardNoPlan.visibility = View.GONE
             cardBudgetOverview.visibility = View.VISIBLE
             tvCategoryLabel.visibility = View.VISIBLE
             llCategoryList.visibility = View.VISIBLE
             btnOpenAddPlanBottom.visibility = View.VISIBLE
+            btnManageHistory.visibility = View.VISIBLE
             btnOpenAddPlanBottom.text = "계획 수정하기"
 
             val dec = DecimalFormat("#,###")

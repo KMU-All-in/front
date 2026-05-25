@@ -289,17 +289,37 @@
                     android:layout_height="wrap_content"
                     android:orientation="vertical" />
 
-                <!-- 하단 계획 추가 버튼 -->
-                <Button
-                    android:id="@+id/btnOpenAddPlanBottom"
-                    android:layout_width="wrap_content"
+                <!-- 하단 버튼 영역 -->
+                <LinearLayout
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_gravity="center"
+                    android:orientation="horizontal"
+                    android:gravity="center"
                     android:layout_marginTop="20dp"
-                    android:backgroundTint="@android:color/black"
-                    android:text="+ 계획 추가"
-                    android:textColor="@android:color/white"
-                    app:cornerRadius="8dp" />
+                    android:paddingHorizontal="24dp">
+
+                    <Button
+                        android:id="@+id/btnOpenAddPlanBottom"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginEnd="8dp"
+                        android:backgroundTint="@android:color/black"
+                        android:text="+ 계획 추가"
+                        android:textColor="@android:color/white"
+                        app:cornerRadius="8dp" />
+
+                    <Button
+                        android:id="@+id/btnManageHistory"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:backgroundTint="#F2F4F8"
+                        android:text="지출 내역 관리"
+                        android:textColor="@android:color/black"
+                        app:cornerRadius="8dp"
+                        android:visibility="gone" /> <!-- 계획이 있을 때만 보이도록 설정 예정 -->
+                </LinearLayout>
 
             </LinearLayout>
         </ScrollView>

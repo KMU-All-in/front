@@ -582,3 +582,60 @@ exports.generateMonthlyReport = onCall((request) => {
     );
   }
 });
+
+// -----------------------------
+// 고급 파싱 기능 (Puppeteer 활용)
+// -----------------------------
+
+const chromium = require('chrome-aws-lambda');
+const puppeteer = require('puppeteer-core');
+
+exports.advancedProductParse = onCall(async (request) => {
+  const { url } = request.data || {};
+  if (!url) throw new HttpsError("invalid-argument", "URL이 필요합니다.");
+  
+  let browser = null;
+
+  try {
+    browser = await puppeteer.launch({
+      args: chromium.args,
+      defaultViewport: chromium.defaultViewport,
+      executablePath: await chromium.executablePath,
+      headless: chromium.headless,
+    });
+
+    const page = await browser.newPage();
+    
+    // 유저 에이전트 설정 (매우 중요)
+    await page.setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1');
+    
+    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+
+    // 에이블리/쿠팡 등에서 데이터 추출
+    const productInfo = await page.evaluate(() => {
+      // 1. 가격 추출 (에이블리 특화 선택자 예시)
+      const priceText = document.querySelector('.price, [class*="Price"], [class*="price"]')?.innerText || "";
+      const price = parseInt(priceText.replace(/[^0-9]/g, "")) || 0;
+
+      // 2. 상품명 추출
+      const name = document.querySelector('meta[property="og:title"]')?.content || 
+                   document.querySelector('meta[name="twitter:title"]')?.content || 
+                   document.title;
+
+      // 3. 이미지 추출
+      const imageUrl = document.querySelector('meta[property="og:image"]')?.content || 
+                       document.querySelector('meta[name="twitter:image"]')?.content || "";
+
+      return { name, price, imageUrl };
+    });
+
+    return { success: true, result: productInfo };
+
+  } catch (error) {
+    console.error("Advanced Parse Error:", error);
+    return { success: false, message: error.message };
+  } finally {
+    if (browser !== null) await browser.close();
+  }
+});
+

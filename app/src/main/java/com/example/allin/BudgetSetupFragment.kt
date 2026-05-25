@@ -35,6 +35,7 @@ class BudgetFragment : Fragment() {
     private lateinit var tvCategoryLabel: TextView
     private lateinit var llCategoryList: LinearLayout
     private lateinit var btnOpenAddPlanBottom: Button
+    private lateinit var btnManageHistory: Button
 
     private val categories = arrayOf("패션/의류", "뷰티/화장품", "전자기기", "도서/문구", "식품/음료", "생활용품", "스포츠/레저", "기타")
 
@@ -70,6 +71,7 @@ class BudgetFragment : Fragment() {
         tvCategoryLabel = view.findViewById(R.id.tvCategoryLabel)
         llCategoryList = view.findViewById(R.id.llCategoryList)
         btnOpenAddPlanBottom = view.findViewById(R.id.btnOpenAddPlanBottom)
+        btnManageHistory = view.findViewById(R.id.btnManageHistory)
 
         val adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, categories)
         spCategory.adapter = adapter
@@ -85,6 +87,10 @@ class BudgetFragment : Fragment() {
         btnOpenAddPlanBottom.setOnClickListener { showAddPlanPopup() }
         view.findViewById<ImageView>(R.id.btnEditBudget).setOnClickListener { showAddPlanPopup() }
         view.findViewById<ImageView>(R.id.btnDeleteBudget).setOnClickListener { deletePlan() }
+
+        btnManageHistory.setOnClickListener {
+            startActivity(Intent(requireContext(), PaymentHistoryActivity::class.java))
+        }
 
         btnSaveBudget.setOnClickListener { saveData() }
 
@@ -268,12 +274,14 @@ class BudgetFragment : Fragment() {
             tvCategoryLabel.visibility = View.GONE
             llCategoryList.visibility = View.GONE
             btnOpenAddPlanBottom.visibility = View.GONE
+            btnManageHistory.visibility = View.GONE
         } else {
             cardNoPlan.visibility = View.GONE
             cardBudgetOverview.visibility = View.VISIBLE
             tvCategoryLabel.visibility = View.VISIBLE
             llCategoryList.visibility = View.VISIBLE
             btnOpenAddPlanBottom.visibility = View.VISIBLE
+            btnManageHistory.visibility = View.VISIBLE
             btnOpenAddPlanBottom.text = "계획 수정하기"
 
             val dec = DecimalFormat("#,###")

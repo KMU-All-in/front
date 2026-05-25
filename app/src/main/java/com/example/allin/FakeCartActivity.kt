@@ -37,6 +37,7 @@ import kotlinx.coroutines.withContext
 import org.jsoup.Jsoup
 import java.text.DecimalFormat
 import java.util.*
+import java.util.regex.Pattern
 import java.util.concurrent.TimeUnit
 
 class FakeCartActivity : AppCompatActivity() {
@@ -60,6 +61,7 @@ class FakeCartActivity : AppCompatActivity() {
     private lateinit var etUrlInput: EditText
     private lateinit var etManualName: EditText
     private lateinit var etManualPrice: EditText
+    private lateinit var etEditUrl: EditText
     private lateinit var etEditName: EditText
     private lateinit var etEditPrice: EditText
     private lateinit var spExpiry: Spinner
@@ -121,7 +123,21 @@ class FakeCartActivity : AppCompatActivity() {
         if (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") {
             val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
             if (sharedText != null) {
-                etUrlInput.setText(sharedText)
+                // [개선] 텍스트에서 URL만 추출
+                val urlPattern = Pattern.compile("(https?://[\\\\w\\\\d:#@%/;$()~_?\\\\+-=\\\\\\\\\\.&]+)", Pattern.CASE_INSENSITIVE)
+                val matcher = urlPattern.matcher(sharedText)
+                if (matcher.find()) {
+                    val extractedUrl = matcher.group(1)
+                    etUrlInput.setText(extractedUrl)
+                    // URL 외의 텍스트가 있다면 상품명으로 미리 채워줌
+                    val nameCandidate = sharedText.replace(extractedUrl, "").trim()
+                    if (nameCandidate.isNotEmpty()) {
+                        etManualName.setText(nameCandidate)
+                    }
+                } else {
+                    etUrlInput.setText(sharedText)
+                }
+                
                 selectTab(0)
                 showAddProductPopup()
                 intent.action = null
@@ -178,8 +194,11 @@ class FakeCartActivity : AppCompatActivity() {
         etUrlInput = findViewById(R.id.etUrlInput)
         etManualName = findViewById(R.id.etManualName)
         etManualPrice = findViewById(R.id.etManualPrice)
-        etEditName = findViewById(R.id.etEditName) 
-        etEditPrice = findViewById(R.id.etEditPrice) 
+        
+        etEditUrl = findViewById(R.id.etEditUrl)
+        etEditName = findViewById(R.id.etEditName)
+        etEditPrice = findViewById(R.id.etEditPrice)
+        
         spExpiry = findViewById(R.id.spExpiry)
         btnSubmit = findViewById(R.id.btnSubmit)
         btnSubmitEdit = findViewById(R.id.btnSubmitEdit) 
@@ -232,7 +251,7 @@ class FakeCartActivity : AppCompatActivity() {
         tabManual.backgroundTintList = ColorStateList.valueOf(if (index == 2) activeBg else inactiveBg)
         tabManual.setTextColor(if (index == 2) activeText else inactiveText)
 
-        layoutUrlInput.visibility = if (index == 0) View.VISIBLE else View.GONE
+        // URL 입력은 이제 항상 보임
         layoutPhotoInput.visibility = if (index == 1) View.VISIBLE else View.GONE
         layoutManualInput.visibility = if (index == 2) View.VISIBLE else View.GONE
     }
@@ -240,7 +259,6 @@ class FakeCartActivity : AppCompatActivity() {
     private fun observeCartItems() {
         lifecycleScope.launch {
             repository.allProducts.collect { products ->
-                // 만료 체크 로직은 이제 MainActivity에서만 수행합니다.
                 renderCartItems(products)
             }
         }
@@ -279,6 +297,35 @@ class FakeCartActivity : AppCompatActivity() {
             itemView.findViewById<TextView>(R.id.tvReasonsSummary)?.text = reasonsText
 
             itemView.findViewById<Button>(R.id.btnAddReason)?.setOnClickListener { showAddReasonPopup(product) }
+
+            // [추가] 리스트 아이템 터치 시 URL 이동/복사 로직
+            itemView.setOnClickListener {
+                val isDDay = diffInDays <= 0
+                val reasonCount = product.reasons.size
+                val hasEnoughReasons = reasonCount >= 5
+
+                if ((isDDay || hasEnoughReasons) && product.url.isNotEmpty()) {
+                    try {
+                        val url = if (!product.url.startsWith("http")) "https://${product.url}" else product.url
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                        startActivity(intent)
+                    } catch (e: Exception) {
+                        // 이동 실패 시 클립보드 복사
+                        val clipboard = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                        val clip = android.content.ClipData.newPlainText("Product URL", product.url)
+                        clipboard.setPrimaryClip(clip)
+                        Toast.makeText(this, "브라우저 연결이 어려워 주소를 복사했습니다.", Toast.LENGTH_SHORT).show()
+                    }
+                } else {
+                    if (product.url.isEmpty()) {
+                        Toast.makeText(this, "연결할 주소가 저장되어 있지 않습니다.", Toast.LENGTH_SHORT).show()
+                    } else {
+                        val message = "숙고가 부족합니다! (남은 기간: ${if(diffInDays > 0) diffInDays else 0}일 또는 남은 이유: ${5 - reasonCount}개)"
+                        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+
             itemView.findViewById<ImageButton>(R.id.btnOptions)?.setOnClickListener { view ->
                 val popup = PopupMenu(this, view)
                 popup.menu.add("수정")
@@ -314,6 +361,8 @@ class FakeCartActivity : AppCompatActivity() {
         editingProduct = product
         dimView.visibility = View.VISIBLE
         cardEditProduct.visibility = View.VISIBLE
+        
+        etEditUrl.setText(product.url)
         etEditName.setText(product.name)
         etEditPrice.setText(product.price.toString())
         if (product.imageUrl.isNotEmpty()) {
@@ -325,6 +374,8 @@ class FakeCartActivity : AppCompatActivity() {
         val product = editingProduct ?: return
         lifecycleScope.launch {
             val updatedProduct = product.copy(
+                // 사용자가 확인/수정하지 못하도록 기존 URL을 그대로 유지
+                url = product.url,
                 name = etEditName.text.toString().trim().ifEmpty { product.name },
                 price = etEditPrice.text.toString().toIntOrNull() ?: product.price,
                 imageUrl = selectedImageUri?.toString() ?: product.imageUrl
@@ -362,20 +413,17 @@ class FakeCartActivity : AppCompatActivity() {
             val url = etUrlInput.text.toString().trim()
             var imageUrl = ""
             val expiryDays = when(spExpiry.selectedItemPosition) {
-                0 -> 1; 1 -> 3; 3 -> 14; 4 -> 30; else -> 7
+                0 -> 1; 1 -> 3; 2 -> 7; 3 -> 14; 4 -> 30; else -> 7
             }
 
-            if (currentTabIndex == 0 && url.isNotEmpty()) {
+            if (url.isNotEmpty()) {
                 try {
-                    withContext(Dispatchers.IO) {
-                        val doc = Jsoup.connect(url).userAgent("Mozilla/5.0").timeout(5000).get()
-                        name = doc.select("meta[property=og:title]").attr("content").ifEmpty { doc.title().split(":")[0].trim() }
-                        imageUrl = doc.select("meta[property=og:image]").attr("content")
-                        val priceStr = doc.select("meta[property=product:price:amount]").attr("content")
-                        if (priceStr.isNotEmpty()) price = priceStr.replace(Regex("[^0-9]"), "").toIntOrNull() ?: 0
-                    }
+                    val parsed = ProductParser.parse(url)
+                    name = if (name.isEmpty()) (parsed.name ?: "") else name
+                    price = if (price == 0) (parsed.price ?: 0) else price
+                    imageUrl = parsed.imageUrl ?: ""
                 } catch (e: Exception) {
-                    Log.e("FakeCart", "Jsoup error", e)
+                    Log.e("FakeCart", "Parsing error", e)
                 }
             }
 

@@ -11,6 +11,7 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.tasks.await
 
 class PaymentRepository(private val paymentDao: PaymentDao) {
 
@@ -18,6 +19,39 @@ class PaymentRepository(private val paymentDao: PaymentDao) {
     private val auth = FirebaseAuth.getInstance()
 
     val allPayments: Flow<List<Payment>> = paymentDao.getAllPayments()
+
+    suspend fun fetchPaymentsFromFirestore() {
+        val user = auth.currentUser ?: return
+        try {
+            val snapshots = firestore.collection("users").document(user.uid)
+                .collection("transactions")
+                .get()
+                .await()
+            
+            val payments = snapshots.documents.mapNotNull { doc ->
+                val amount = doc.getLong("amount")?.toInt() ?: return@mapNotNull null
+                val storeName = doc.getString("storeName") ?: "알 수 없음"
+                val date = doc.getLong("date") ?: 0L
+                val category = doc.getString("category") ?: "기타"
+                val itemName = doc.getString("itemName") ?: ""
+                
+                Payment(
+                    amount = amount,
+                    storeName = storeName,
+                    date = date,
+                    category = category,
+                    itemName = itemName
+                )
+            }
+            
+            if (payments.isNotEmpty()) {
+                paymentDao.deleteAll()
+                paymentDao.insertAll(payments)
+            }
+        } catch (e: Exception) {
+            // Log error or handle
+        }
+    }
 
     suspend fun insert(payment: Payment, context: Context) {
         paymentDao.insert(payment)

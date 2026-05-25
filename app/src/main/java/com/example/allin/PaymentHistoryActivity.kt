@@ -1,5 +1,6 @@
 package com.example.allin
 
+import android.graphics.Color
 import android.os.Bundle
 import android.view.LayoutInflater
 import android.view.View
@@ -42,7 +43,12 @@ class PaymentHistoryActivity : AppCompatActivity() {
         setupSortSpinner()
         setupCategoryFilter()
         setupAddButton()
-        observePayments()
+
+        // [추가] 화면 진입 시 Firestore에서 기존 데이터 동기화
+        lifecycleScope.launch {
+            repository.fetchPaymentsFromFirestore()
+            observePayments()
+        }
     }
 
     private fun setupToolbar() {
@@ -145,7 +151,7 @@ class PaymentHistoryActivity : AppCompatActivity() {
         spCategory.adapter = categoryAdapter
         spCategory.setSelection(categories.indexOf("기타"))
 
-        AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setTitle("지출 내역 추가")
             .setView(view)
             .setPositiveButton("추가") { _, _ ->
@@ -170,7 +176,13 @@ class PaymentHistoryActivity : AppCompatActivity() {
                 }
             }
             .setNegativeButton("취소", null)
-            .show()
+            .create()
+
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(Color.BLACK)
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(Color.parseColor("#9E9E9E"))
+        }
+        dialog.show()
     }
 
     private fun showEditDialog(payment: Payment) {
@@ -189,7 +201,7 @@ class PaymentHistoryActivity : AppCompatActivity() {
         val categoryIndex = categories.indexOf(payment.category)
         if (categoryIndex >= 0) spCategory.setSelection(categoryIndex)
 
-        AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setTitle("결제 내역 수정")
             .setView(view)
             .setPositiveButton("완료") { _, _ ->
@@ -210,7 +222,13 @@ class PaymentHistoryActivity : AppCompatActivity() {
                 }
             }
             .setNegativeButton("취소", null)
-            .show()
+            .create()
+
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(Color.BLACK)
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(Color.parseColor("#9E9E9E"))
+        }
+        dialog.show()
     }
 
     private fun showDeleteConfirmDialog(payment: Payment) {
