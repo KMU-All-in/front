@@ -71,19 +71,240 @@ function normalizeAmount(value) {
   return Number(cleaned);
 }
 
-function classifyCategory(storeName, fullText = "") {
+const categoryRules = [
+  {
+    category: "식품/음료",
+    confidence: 0.9,
+    keywords: [
+      "gs25",
+      "cu",
+      "세븐일레븐",
+      "이마트24",
+      "카페",
+      "커피",
+      "스타벅스",
+      "이디야",
+      "메가커피",
+      "메가엠지씨",
+      "투썸",
+      "빽다방",
+      "컴포즈",
+      "공차",
+      "식당",
+      "음식점",
+      "분식",
+      "김밥",
+      "국밥",
+      "고기",
+      "삼겹살",
+      "치킨",
+      "피자",
+      "버거",
+      "맥도날드",
+      "버거킹",
+      "롯데리아",
+      "맘스터치",
+      "배달",
+      "배달의민족",
+      "요기요",
+      "쿠팡이츠",
+      "별차이나",
+      "중식",
+      "중국집",
+      "반점",
+      "마라",
+      "짜장",
+      "짬뽕"
+    ]
+  },
+  {
+    category: "패션/의류",
+    confidence: 0.9,
+    keywords: [
+      "백화점",
+      "쇼핑",
+      "쇼핑몰",
+      "몰",
+      "의류",
+      "패션",
+      "옷",
+      "신발",
+      "가방",
+      "잡화",
+      "무신사",
+      "지그재그",
+      "에이블리",
+      "브랜디",
+      "29cm",
+      "w컨셉",
+      "유니클로",
+      "자라",
+      "스파오",
+      "탑텐",
+      "나이키",
+      "아디다스",
+      "뉴발란스",
+      "abc마트"
+    ]
+  },
+  {
+    category: "뷰티/화장품",
+    confidence: 0.9,
+    keywords: [
+      "올리브영",
+      "화장품",
+      "뷰티",
+      "헤어",
+      "미용실",
+      "네일",
+      "피부",
+      "에뛰드",
+      "이니스프리",
+      "아리따움",
+      "미샤",
+      "토니모리",
+      "롭스",
+      "랄라블라",
+      "무신사뷰티"
+    ]
+  },
+  {
+    category: "전자기기",
+    confidence: 0.9,
+    keywords: [
+      "하이마트",
+      "전자",
+      "전자랜드",
+      "애플",
+      "apple",
+      "삼성",
+      "samsung",
+      "lg전자",
+      "컴퓨터",
+      "노트북",
+      "아이폰",
+      "아이패드",
+      "맥북",
+      "에어팟",
+      "휴대폰",
+      "스마트폰",
+      "쿠팡전자",
+      "프리스비",
+      "윌리스"
+    ]
+  },
+  {
+    category: "도서/문구",
+    confidence: 0.9,
+    keywords: [
+      "서점",
+      "교보",
+      "교보문고",
+      "영풍문고",
+      "알라딘",
+      "예스24",
+      "yes24",
+      "문구",
+      "문구점",
+      "아트박스",
+      "핫트랙스",
+      "학원",
+      "학교",
+      "대학교",
+      "복사",
+      "인쇄",
+      "프린트",
+      "스터디",
+      "독서실",
+      "스카",
+      "스터디카페"
+    ]
+  },
+  {
+    category: "생활용품",
+    confidence: 0.9,
+    keywords: [
+      "이마트",
+      "홈플러스",
+      "롯데마트",
+      "마트",
+      "코스트코",
+      "트레이더스",
+      "다이소",
+      "생활",
+      "생활용품",
+      "잡화",
+      "세탁",
+      "빨래방",
+      "크린토피아",
+      "편의용품",
+      "주방",
+      "욕실",
+      "청소",
+      "가구",
+      "오늘의집",
+      "한샘",
+      "이케아",
+      "ikea"
+    ]
+  },
+  {
+    category: "스포츠/레저",
+    confidence: 0.9,
+    keywords: [
+      "헬스",
+      "헬스장",
+      "피트니스",
+      "짐",
+      "요가",
+      "필라테스",
+      "축구",
+      "스포츠",
+      "레저",
+      "골프",
+      "스크린골프",
+      "볼링",
+      "수영",
+      "테니스",
+      "배드민턴",
+      "클라이밍",
+      "등산",
+      "자전거",
+      "스포츠센터"
+    ]
+  }
+];
+
+function classifyCategoryWithConfidence(storeName, fullText = "") {
   const lowerStore = String(storeName || "").toLowerCase();
   const lowerText = String(fullText || "").toLowerCase();
-  const check = (keywords) => keywords.some(kw => lowerStore.includes(kw) || lowerText.includes(kw));
 
-  if (check(["gs25", "cu", "세븐일레븐", "이마트24", "카페", "커피", "식당", "음식점", "배달", "치킨", "피자", "별차이나", "중식", "중국집", "반점", "마라", "짜장", "짬뽕"])) return "식품/음료";
-  if (check(["백화점", "쇼핑", "몰", "의류", "패션", "무신사", "지그재그"])) return "패션/의류";
-  if (check(["올리브영", "화장품", "뷰티", "헤어", "미용실"])) return "뷰티/화장품";
-  if (check(["하이마트", "전자", "애플", "삼성", "컴퓨터"])) return "전자기기";
-  if (check(["서점", "교보", "문구", "다이소", "학원", "학교"])) return "도서/문구";
-  if (check(["이마트", "홈플러스", "롯데마트", "마트", "다이소", "생활", "세탁"])) return "생활용품";
-  if (check(["헬스", "축구", "스포츠", "레저", "골프"])) return "스포츠/레저";
-  return "기타";
+  for (const rule of categoryRules) {
+    const matchedKeywords = rule.keywords.filter((keyword) => {
+      const lowerKeyword = String(keyword).toLowerCase();
+      return lowerStore.includes(lowerKeyword) || lowerText.includes(lowerKeyword);
+    });
+
+    if (matchedKeywords.length > 0) {
+      return {
+        category: rule.category,
+        confidence: rule.confidence,
+        source: "rule",
+        matchedKeywords
+      };
+    }
+  }
+
+  return {
+    category: "기타",
+    confidence: 0.3,
+    source: "rule",
+    matchedKeywords: []
+  };
+}
+
+function classifyCategory(storeName, fullText = "") {
+  return classifyCategoryWithConfidence(storeName, fullText).category;
 }
 
 function extractAmountFromText(content) {
