@@ -1,43 +1,54 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
+    android:layout_height="86dp"
+    android:layout_marginBottom="12dp"
+    android:background="@drawable/bg_app_lock_card"
+    android:elevation="2dp"
+    android:gravity="center_vertical"
     android:orientation="horizontal"
-    android:padding="12dp"
-    android:gravity="center_vertical">
+    android:paddingStart="18dp"
+    android:paddingEnd="18dp">
 
     <ImageView
         android:id="@+id/ivAppIcon"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:layout_marginEnd="16dp" />
+        android:layout_width="52dp"
+        android:layout_height="52dp"
+        android:layout_marginEnd="18dp"
+        android:scaleType="centerCrop" />
 
     <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
         android:orientation="vertical">
-        
+
         <TextView
             android:id="@+id/tvAppName"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="16sp"
-            android:textColor="@android:color/black" />
-            
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#081333"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
         <TextView
             android:id="@+id/tvPackageName"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:textSize="12sp"
-            android:textColor="#9E9E9E" />
+            android:layout_marginTop="6dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#8B94A8"
+            android:textSize="14sp" />
     </LinearLayout>
 
     <CheckBox
         android:id="@+id/cbSelect"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="42dp"
+        android:layout_height="42dp"
+        android:buttonTint="#8B8F98"
         android:clickable="false"
         android:focusable="false" />
-
 </LinearLayout>

@@ -236,7 +236,7 @@ class AppLockActivity : AppCompatActivity() {
     }
 
     private fun showDeleteAllConfirmDialog() {
-        AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setTitle("전체 삭제")
             .setMessage("쇼핑 앱 잠금 리스트를 모두 삭제하시겠습니까?")
             .setPositiveButton("삭제") { _, _ ->
@@ -245,7 +245,16 @@ class AppLockActivity : AppCompatActivity() {
                 }
             }
             .setNegativeButton("취소", null)
-            .show()
+            .create()
+
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setTextColor(Color.parseColor("#F04452"))
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
+                .setTextColor(Color.parseColor("#8B94A8"))
+        }
+
+        dialog.show()
     }
 
     private fun showPasswordChangeDialog() {
@@ -302,7 +311,7 @@ class AppLockActivity : AppCompatActivity() {
     }
 
     private fun showRemoveLockedAppDialog(app: LockedApp) {
-        AlertDialog.Builder(this)
+        val dialog = AlertDialog.Builder(this)
             .setTitle("앱 삭제")
             .setMessage("${app.name} 앱을 잠금 리스트에서 삭제하시겠습니까?")
             .setPositiveButton("삭제") { _, _ ->
@@ -311,6 +320,15 @@ class AppLockActivity : AppCompatActivity() {
                 }
             }
             .setNegativeButton("취소", null)
-            .show()
+            .create()
+
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setTextColor(Color.parseColor("#F04452"))
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
+                .setTextColor(Color.parseColor("#8B94A8"))
+        }
+
+        dialog.show()
     }
 }
