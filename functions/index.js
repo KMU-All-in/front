@@ -1,4 +1,15 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const OpenAI = require("openai");
+
+function getOpenAIClient() {
+  if (!process.env.OPENAI_API_KEY) {
+    return null;
+  }
+
+  return new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY
+  });
+}
 
 const fieldMap = {
   date: ["date", "payment_date", "paymentDate", "used_at", "승인일자", "결제일", "이용일자", "거래일자"],
@@ -70,6 +81,17 @@ function normalizeAmount(value) {
   const cleaned = text.replace(/[^0-9-]/g, "");
   return Number(cleaned);
 }
+
+const allowedCategories = [
+  "식품/음료",
+  "패션/의류",
+  "뷰티/화장품",
+  "전자기기",
+  "도서/문구",
+  "생활용품",
+  "스포츠/레저",
+  "기타"
+];
 
 const categoryRules = [
   {
@@ -307,6 +329,112 @@ function classifyCategory(storeName, fullText = "") {
   return classifyCategoryWithConfidence(storeName, fullText).category;
 }
 
+async function classifyCategoryWithAI(storeName, fullText = "") {
+  if (!process.env.OPENAI_API_KEY) {
+    return {
+      category: "기타",
+      confidence: 0.3,
+      source: "ai",
+      reason: "OPENAI_API_KEY가 설정되지 않았습니다."
+    };
+  }
+
+  const input = {
+    storeName: String(storeName || ""),
+    fullText: String(fullText || ""),
+    allowedCategories
+  };
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      temperature: 0,
+      messages: [
+        {
+          role: "system",
+          content: `
+너는 결제내역 카테고리 분류 엔진이다.
+입력된 결제처와 결제문구를 보고 허용 카테고리 중 하나만 선택한다.
+
+규칙:
+- 반드시 JSON만 반환한다.
+- category는 allowedCategories 중 하나만 사용한다.
+- 확실하지 않으면 "기타"로 분류하고 confidence를 0.5 이하로 둔다.
+- 결제처가 PG사/간편결제명만 있으면 실제 사용처가 불명확하므로 confidence를 낮게 둔다.
+- 개인정보를 추론하지 않는다.
+`
+        },
+        {
+          role: "user",
+          content: JSON.stringify(input)
+        }
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "payment_category_result",
+          strict: true,
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              category: {
+                type: "string",
+                enum: allowedCategories
+              },
+              confidence: {
+                type: "number"
+              },
+              reason: {
+                type: "string"
+              }
+            },
+            required: ["category", "confidence", "reason"]
+          }
+        }
+      }
+    });
+
+    const content = completion.choices[0].message.content;
+    const parsed = JSON.parse(content);
+
+    return {
+      category: allowedCategories.includes(parsed.category) ? parsed.category : "기타",
+      confidence: Math.max(0, Math.min(1, Number(parsed.confidence) || 0.5)),
+      source: "ai",
+      reason: parsed.reason || ""
+    };
+  } catch (error) {
+    console.error("AI category classification failed:", error);
+
+    return {
+      category: "기타",
+      confidence: 0.3,
+      source: "ai",
+      reason: "AI 호출 실패"
+    };
+  }
+}
+
+async function classifyCategorySmart(storeName, fullText = "") {
+  const ruleResult = classifyCategoryWithConfidence(storeName, fullText);
+
+  if (ruleResult.category !== "기타" && ruleResult.confidence >= 0.85) {
+    return {
+      ...ruleResult,
+      usedAI: false
+    };
+  }
+
+  const aiResult = await classifyCategoryWithAI(storeName, fullText);
+
+  return {
+    ...aiResult,
+    usedAI: true,
+    ruleResult
+  };
+}
+
 function extractAmountFromText(content) {
   const paymentAmountPatterns = [
     /([\d,]+)\s*원\s*(?:카드)?(?:결제완료|결제|승인|사용|출금)/,
@@ -444,48 +572,71 @@ function inferPaymentItem(item) {
   return parsed;
 }
 
-exports.parsePaymentData = onCall((request) => {
-  const data = request.data;
-  if (!data || !data.paymentData) throw new HttpsError("invalid-argument", "paymentData 필요");
-  try {
-    const parsedList = data.paymentData.map(item => inferPaymentItem(item));
-    return {
-      success: true,
-      result: {
-        validData: parsedList.filter(i => i.isValid),
-        invalidData: parsedList.filter(i => !i.isValid)
-      }
-    };
-  } catch (error) {
-    throw new HttpsError("internal", error.message);
-  }
-});
-
-exports.parseNotification = onCall((request) => {
+exports.parseNotification = onCall(async (request) => {
   const { title = "", text = "" } = request.data || {};
   const fullText = `${title} ${text}`.trim();
-  if (!fullText) throw new HttpsError("invalid-argument", "내용이 없습니다.");
 
-  const excludeKeywords = ["입금", "환불", "취소", "입금완료", "(광고)", "광고", "모임통장", "모임 통장"];
-  if (excludeKeywords.some(kw => fullText.includes(kw))) return { success: false, reason: "excluded" };
+  if (!fullText) {
+    throw new HttpsError("invalid-argument", "내용이 없습니다.");
+  }
+
+  const excludeKeywords = [
+    "입금",
+    "환불",
+    "취소",
+    "입금완료",
+    "(광고)",
+    "광고",
+    "모임통장",
+    "모임 통장"
+  ];
+
+  if (excludeKeywords.some(kw => fullText.includes(kw))) {
+    return { success: false, reason: "excluded" };
+  }
 
   const payKeywords = ["승인", "결제", "일시불", "출금", "카드승인", "자동이체"];
-  if (!payKeywords.some(kw => fullText.includes(kw))) return { success: false, reason: "not_payment" };
+
+  if (!payKeywords.some(kw => fullText.includes(kw))) {
+    return { success: false, reason: "not_payment" };
+  }
 
   const amount = extractAmountFromText(fullText);
-  if (amount <= 0) return { success: false, reason: "amount_not_found" };
+
+  if (amount <= 0) {
+    return { success: false, reason: "amount_not_found" };
+  }
 
   const storeName = extractStoreNameFromNotification(title, text, fullText);
+  const categoryResult = await classifyCategorySmart(storeName, fullText);
 
   return {
     success: true,
     result: {
       amount,
       storeName,
-      category: classifyCategory(storeName, fullText),
+      category: categoryResult.category,
+      categoryConfidence: categoryResult.confidence,
+      categorySource: categoryResult.source,
+      usedAI: categoryResult.usedAI,
+      categoryReason: categoryResult.reason || "",
       date: new Date().getTime(),
       originalText: fullText
     }
+  };
+});
+
+exports.classifyCategory = onCall((request) => {
+  const { storeName = "", fullText = "" } = request.data || {};
+
+  const categoryResult = classifyCategoryWithConfidence(storeName, fullText);
+
+  return {
+    success: true,
+    category: categoryResult.category,
+    confidence: categoryResult.confidence,
+    source: categoryResult.source,
+    matchedKeywords: categoryResult.matchedKeywords
   };
 });
 
