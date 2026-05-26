@@ -71,8 +71,15 @@
                     android:textColor="#424242"
                     android:textColorHint="#9E9E9E"
                     android:textSize="14sp" />
+                <TextView
+                    android:id="@+id/tvEmailError"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:textColor="#FF5252"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
 
-                <!-- [추가] 계정 비밀번호 -->
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -86,12 +93,20 @@
                     android:layout_height="50dp"
                     android:layout_marginTop="8dp"
                     android:background="#F2F4F8"
-                    android:hint="6자리 이상 입력해주세요"
+                    android:hint="영문, 숫자 포함 8자리 이상"
                     android:inputType="textPassword"
                     android:paddingStart="12dp"
                     android:textColor="#424242"
                     android:textColorHint="#9E9E9E"
                     android:textSize="14sp" />
+                <TextView
+                    android:id="@+id/tvPwError"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:textColor="#FF5252"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
 
                 <TextView
                     android:layout_width="wrap_content"
@@ -112,8 +127,15 @@
                     android:textColor="#424242"
                     android:textColorHint="#9E9E9E"
                     android:textSize="14sp" />
+                <TextView
+                    android:id="@+id/tvPwConfirmError"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:textColor="#FF5252"
+                    android:textSize="12sp"
+                    android:visibility="gone" />
 
-                <!-- 연령대, 직업, 관심사 (기존 유지) -->
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"

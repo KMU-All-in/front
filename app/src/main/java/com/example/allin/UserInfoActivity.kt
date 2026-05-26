@@ -3,7 +3,9 @@ package com.example.allin
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
-import android.util.Log
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AppCompatActivity
 import com.google.firebase.auth.FirebaseAuth
@@ -24,6 +26,10 @@ class UserInfoActivity : AppCompatActivity() {
         val etUserPw = findViewById<EditText>(R.id.etUserPw)
         val etUserPwConfirm = findViewById<EditText>(R.id.etUserPwConfirm)
         
+        val tvEmailError = findViewById<TextView>(R.id.tvEmailError)
+        val tvPwError = findViewById<TextView>(R.id.tvPwError)
+        val tvPwConfirmError = findViewById<TextView>(R.id.tvPwConfirmError)
+        
         val spAge = findViewById<Spinner>(R.id.spAge)
         val etUserJob = findViewById<EditText>(R.id.etUserJob)
         val btnNext = findViewById<Button>(R.id.btnNext)
@@ -32,26 +38,69 @@ class UserInfoActivity : AppCompatActivity() {
         val ageAdapter = ArrayAdapter(this, android.R.layout.simple_spinner_dropdown_item, ages)
         spAge.adapter = ageAdapter
 
+        // 실시간 이메일 유효성 검사
+        etUserEmail.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                val email = s.toString().trim()
+                if (email.isEmpty()) {
+                    tvEmailError.visibility = View.GONE
+                } else if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                    tvEmailError.text = "올바른 이메일 형식이 아닙니다."
+                    tvEmailError.visibility = View.VISIBLE
+                } else {
+                    tvEmailError.visibility = View.GONE
+                }
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
+
+        // 실시간 비밀번호 제약 검사
+        etUserPw.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                val password = s.toString()
+                val passwordPattern = Pattern.compile("^(?=.*[A-Za-z])(?=.*\\d).{8,}$")
+                if (password.isEmpty()) {
+                    tvPwError.visibility = View.GONE
+                } else if (!passwordPattern.matcher(password).matches()) {
+                    tvPwError.text = "영문과 숫자를 혼합하여 8자리 이상이어야 합니다."
+                    tvPwError.visibility = View.VISIBLE
+                } else {
+                    tvPwError.visibility = View.GONE
+                }
+                
+                // 비밀번호가 바뀌면 확인 창도 다시 체크
+                checkPasswordMatch(password, etUserPwConfirm.text.toString(), tvPwConfirmError)
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
+
+        // 실시간 비밀번호 일치 검사
+        etUserPwConfirm.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                checkPasswordMatch(etUserPw.text.toString(), s.toString(), tvPwConfirmError)
+            }
+            override fun afterTextChanged(s: Editable?) {}
+        })
+
         btnNext.setOnClickListener {
             val nickname = etNickname.text.toString().trim()
             val email = etUserEmail.text.toString().trim()
             val password = etUserPw.text.toString().trim()
             val passwordConfirm = etUserPwConfirm.text.toString().trim()
 
+            // 모든 에러 메시지가 숨겨져 있고, 필드가 비어있지 않은지 최종 확인
             if (nickname.isEmpty() || email.isEmpty() || password.isEmpty() || passwordConfirm.isEmpty()) {
                 Toast.makeText(this, "모든 필수 항목을 입력해주세요.", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
-            if (password != passwordConfirm) {
-                Toast.makeText(this, "비밀번호가 서로 다릅니다.", Toast.LENGTH_SHORT).show()
-                return@setOnClickListener
-            }
-
-            // [추가] 비밀번호 제약: 영문 + 숫자 혼합, 8자리 이상
-            val passwordPattern = Pattern.compile("^(?=.*[A-Za-z])(?=.*\\d).{8,}$")
-            if (!passwordPattern.matcher(password).matches()) {
-                Toast.makeText(this, "비밀번호는 영문과 숫자를 혼합하여 8자리 이상이어야 합니다.", Toast.LENGTH_LONG).show()
+            if (tvEmailError.visibility == View.VISIBLE || 
+                tvPwError.visibility == View.VISIBLE || 
+                tvPwConfirmError.visibility == View.VISIBLE) {
+                Toast.makeText(this, "입력 형식을 다시 확인해주세요.", Toast.LENGTH_SHORT).show()
                 return@setOnClickListener
             }
 
@@ -64,7 +113,7 @@ class UserInfoActivity : AppCompatActivity() {
                     if (task.isSuccessful) {
                         val user = auth.currentUser
                         
-                        // [추가] 이메일 인증 메일 발송
+                        // 이메일 인증 메일 발송
                         user?.sendEmailVerification()
                             ?.addOnCompleteListener { verifyTask ->
                                 if (verifyTask.isSuccessful) {
@@ -88,6 +137,17 @@ class UserInfoActivity : AppCompatActivity() {
                         Toast.makeText(this, "가입 실패: $errorMsg", Toast.LENGTH_LONG).show()
                     }
                 }
+        }
+    }
+
+    private fun checkPasswordMatch(pw: String, confirm: String, errorTv: TextView) {
+        if (confirm.isEmpty()) {
+            errorTv.visibility = View.GONE
+        } else if (pw != confirm) {
+            errorTv.text = "비밀번호가 일치하지 않습니다."
+            errorTv.visibility = View.VISIBLE
+        } else {
+            errorTv.visibility = View.GONE
         }
     }
 

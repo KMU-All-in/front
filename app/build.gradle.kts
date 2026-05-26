@@ -45,7 +45,12 @@ dependencies {
     // Firebase
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth.ktx)
-    implementation("com.google.firebase:firebase-firestore-ktx") // [추가] Firestore 라이브러리
+    
+    // [해결] Credentials 라이브러리 컴파일 오류 수정 (1.2.0-rc01 버그 대응)
+    implementation("androidx.credentials:credentials:1.2.2")
+    implementation("androidx.credentials:credentials-play-services-auth:1.2.2")
+    
+    implementation("com.google.firebase:firebase-firestore-ktx")
     implementation("com.google.firebase:firebase-functions")
 
     // 웹페이지 정보 추출 및 비동기
