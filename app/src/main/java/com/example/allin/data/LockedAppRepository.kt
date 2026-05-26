@@ -20,16 +20,14 @@ class LockedAppRepository(private val lockedAppDao: LockedAppDao) {
 
     // 여러 앱을 한꺼번에 업데이트 (AppSelectActivity용)
     suspend fun updateAllLockedApps(selectedApps: List<LockedApp>) {
-        // 1. Room 업데이트 (기존꺼 다 지우고 새로 넣기)
         lockedAppDao.deleteAll()
         selectedApps.forEach { lockedAppDao.insert(it) }
 
-        // 2. Firestore 동기화
         val user = auth.currentUser ?: return
-        val packageNames = selectedApps.map { it.packageName }
+        val appStateMap = selectedApps.associate { it.packageName to it.isActive }
         try {
             db.collection("users").document(user.uid)
-                .set(mapOf("locked_apps" to packageNames), SetOptions.merge())
+                .set(mapOf("locked_apps" to appStateMap), SetOptions.merge())
                 .await()
             Log.d("LockedAppRepository", "Firestore sync all success")
         } catch (e: Exception) {
@@ -38,19 +36,21 @@ class LockedAppRepository(private val lockedAppDao: LockedAppDao) {
     }
 
     suspend fun removeLockedApp(packageName: String) {
+        val currentUser = auth.currentUser ?: return
+
         // 1. Room에서 삭제
-        lockedAppDao.delete(LockedApp(packageName, ""))
-        
+        lockedAppDao.delete(LockedApp(packageName, "", false))
+
         // 2. Firestore에서 삭제
-        val user = auth.currentUser ?: return
         try {
-            val docRef = db.collection("users").document(user.uid)
+            val docRef = db.collection("users").document(currentUser.uid)
             db.runTransaction { transaction ->
                 val snapshot = transaction.get(docRef)
-                val currentApps = snapshot.get("locked_apps") as? MutableList<String> ?: mutableListOf()
-                currentApps.remove(packageName)
-                transaction.update(docRef, "locked_apps", currentApps)
+                val currentAppStates = (snapshot.get("locked_apps") as? Map<String, Boolean>)?.toMutableMap() ?: mutableMapOf()
+                currentAppStates.remove(packageName)
+                transaction.update(docRef, "locked_apps", currentAppStates)
             }.await()
+            Log.d("LockedAppRepository", "App removed successfully: $packageName")
         } catch (e: Exception) {
             Log.e("LockedAppRepository", "Firestore sync delete failed", e)
         }
@@ -61,18 +61,62 @@ class LockedAppRepository(private val lockedAppDao: LockedAppDao) {
         val user = auth.currentUser ?: return
         db.collection("users").document(user.uid).get()
             .addOnSuccessListener { snapshot ->
-                val apps = snapshot.get("locked_apps") as? List<String> ?: emptyList()
                 scope.launch {
-
                     lockedAppDao.deleteAll()
-                    apps.forEach { pkg ->
-                        val appName = try {
-                            val info = packageManager.getApplicationInfo(pkg, 0)
-                            packageManager.getApplicationLabel(info).toString()
-                        } catch (e: Exception) { "Locked App" }
-                        lockedAppDao.insert(LockedApp(pkg, appName)) 
+
+                    val appStatesMap = snapshot.get("locked_apps") as? Map<String, Boolean>
+                    if (appStatesMap != null) {
+                        appStatesMap.forEach { (pkg, isActive) ->
+                            val appName = try {
+                                val info = packageManager.getApplicationInfo(pkg, 0)
+                                packageManager.getApplicationLabel(info).toString()
+                            } catch (e: Exception) { "Locked App" }
+                            lockedAppDao.insert(LockedApp(pkg, appName, isActive))
+                        }
+                    } else {
+                        val appStatesList = snapshot.get("locked_apps") as? List<String> ?: emptyList()
+                        appStatesList.forEach { pkg ->
+                            val appName = try {
+                                val info = packageManager.getApplicationInfo(pkg, 0)
+                                packageManager.getApplicationLabel(info).toString()
+                            } catch (e: Exception) { "Locked App" }
+                            lockedAppDao.insert(LockedApp(pkg, appName, true))
+                        }
                     }
+
+                    Log.d("LockedAppRepository", "Sync from Firestore completed")
                 }
             }
+    }
+
+    suspend fun updateLockedAppStatus(packageName: String, isActive: Boolean) {
+        val lockedApp = lockedAppDao.getLockedApp(packageName)
+        if (lockedApp != null) {
+            lockedAppDao.updateLockedApp(lockedApp.copy(isActive = isActive))
+        }
+
+        val currentUser = auth.currentUser ?: return
+        try {
+            val docRef = db.collection("users").document(currentUser.uid)
+            db.runTransaction { transaction ->
+                val snapshot = transaction.get(docRef)
+                val currentAppStates = when (val lockedApps = snapshot.get("locked_apps")) {
+                    is Map<*, *> -> lockedApps.mapNotNull { (key, value) ->
+                        val appPackage = key as? String ?: return@mapNotNull null
+                        appPackage to (value as? Boolean ?: true)
+                    }.toMap().toMutableMap()
+                    is List<*> -> lockedApps.mapNotNull { it as? String }
+                        .associateWith { true }
+                        .toMutableMap()
+                    else -> mutableMapOf()
+                }
+
+                currentAppStates[packageName] = isActive
+                transaction.set(docRef, mapOf("locked_apps" to currentAppStates), SetOptions.merge())
+            }.await()
+            Log.d("LockedAppRepository", "App status synced: $packageName -> $isActive")
+        } catch (e: Exception) {
+            Log.e("LockedAppRepository", "Firestore sync status failed", e)
+        }
     }
 }

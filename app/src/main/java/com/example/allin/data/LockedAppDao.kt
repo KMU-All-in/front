@@ -19,4 +19,10 @@ interface LockedAppDao {
 
     @Query("DELETE FROM locked_apps")
     suspend fun deleteAll()
+
+    @Query("SELECT * FROM locked_apps WHERE packageName = :packageName")
+    suspend fun getLockedApp(packageName: String): LockedApp?
+
+    @Update
+    suspend fun updateLockedApp(lockedApp: LockedApp)
 }

@@ -151,7 +151,7 @@ class AppMonitorService : Service() {
         serviceScope.launch {
             dao.getAllLockedApps().collect { apps ->
                 lockedApps.clear()
-                lockedApps.addAll(apps.map { it.packageName })
+                lockedApps.addAll(apps.filter { it.isActive }.map { it.packageName })
             }
         }
     }
