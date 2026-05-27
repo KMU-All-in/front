@@ -67,6 +67,9 @@ class FakeCartActivity : AppCompatActivity() {
     private lateinit var spExpiry: Spinner
     private lateinit var btnSubmit: Button
     private lateinit var btnSubmitEdit: Button
+    private lateinit var btnAddProduct: Button
+    private lateinit var btnCancelSelection: Button
+    private lateinit var btnDeleteSelected: Button
 
     private lateinit var etNewReason: EditText
     private lateinit var btnSubmitReason: Button
@@ -76,6 +79,8 @@ class FakeCartActivity : AppCompatActivity() {
     private var currentTabIndex = 0
     private var selectedImageUri: Uri? = null
     private var editingProduct: FakeProduct? = null
+    private var latestProducts: List<FakeProduct> = emptyList()
+    private val selectedProductIds = mutableSetOf<String>()
 
     private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
         if (isGranted) scheduleExpiryCheck()
@@ -85,8 +90,10 @@ class FakeCartActivity : AppCompatActivity() {
         uri?.let {
             selectedImageUri = it
             if (cardEditProduct.visibility == View.VISIBLE) {
+                clearImageTint(ivEditPhotoPreview)
                 ivEditPhotoPreview.setImageURI(it)
             } else {
+                clearImageTint(ivPhotoPreview)
                 ivPhotoPreview.setImageURI(it)
             }
             processOcr(it)
@@ -123,11 +130,13 @@ class FakeCartActivity : AppCompatActivity() {
         if (intent?.action == Intent.ACTION_SEND && intent.type == "text/plain") {
             val sharedText = intent.getStringExtra(Intent.EXTRA_TEXT)
             if (sharedText != null) {
+                Log.d("SHARE_DEBUG", "Raw shared text(activity): $sharedText")
+                showAddProductPopup()
                 // [개선] 텍스트에서 URL만 추출
-                val urlPattern = Pattern.compile("(https?://[\\\\w\\\\d:#@%/;$()~_?\\\\+-=\\\\\\\\\\.&]+)", Pattern.CASE_INSENSITIVE)
+                val urlPattern = Pattern.compile("(https?://[^\\s]+)", Pattern.CASE_INSENSITIVE)
                 val matcher = urlPattern.matcher(sharedText)
                 if (matcher.find()) {
-                    val extractedUrl = matcher.group(1)
+                    val extractedUrl = (matcher.group(1) ?: "").trimEnd('.', ',', ')', ']', '}', '"', '\'')
                     etUrlInput.setText(extractedUrl)
                     // URL 외의 텍스트가 있다면 상품명으로 미리 채워줌
                     val nameCandidate = sharedText.replace(extractedUrl, "").trim()
@@ -139,7 +148,7 @@ class FakeCartActivity : AppCompatActivity() {
                 }
                 
                 selectTab(0)
-                showAddProductPopup()
+                previewSharedUrl()
                 intent.action = null
             }
         }
@@ -202,6 +211,9 @@ class FakeCartActivity : AppCompatActivity() {
         spExpiry = findViewById(R.id.spExpiry)
         btnSubmit = findViewById(R.id.btnSubmit)
         btnSubmitEdit = findViewById(R.id.btnSubmitEdit) 
+        btnAddProduct = findViewById(R.id.btnAddProduct)
+        btnCancelSelection = findViewById(R.id.btnCancelSelection)
+        btnDeleteSelected = findViewById(R.id.btnDeleteSelected)
 
         etNewReason = findViewById(R.id.etNewReason)
         btnSubmitReason = findViewById(R.id.btnSubmitReason)
@@ -213,9 +225,9 @@ class FakeCartActivity : AppCompatActivity() {
     }
 
     private fun setupListeners() {
-        findViewById<Button>(R.id.btnAddProduct)?.setOnClickListener { 
-            showAddProductPopup() 
-        }
+        btnAddProduct.setOnClickListener { showAddProductPopup() }
+        btnCancelSelection.setOnClickListener { exitSelectionMode() }
+        btnDeleteSelected.setOnClickListener { confirmDeleteSelected() }
         findViewById<ImageView>(R.id.btnCloseCard)?.setOnClickListener { hidePopups() }
         findViewById<ImageView>(R.id.btnCloseEdit)?.setOnClickListener { hidePopups() } 
         findViewById<ImageView>(R.id.btnCloseReason)?.setOnClickListener { hidePopups() }
@@ -251,9 +263,9 @@ class FakeCartActivity : AppCompatActivity() {
         tabManual.backgroundTintList = ColorStateList.valueOf(if (index == 2) activeBg else inactiveBg)
         tabManual.setTextColor(if (index == 2) activeText else inactiveText)
 
-        // URL 입력은 이제 항상 보임
+        layoutUrlInput.visibility = if (index == 0) View.VISIBLE else View.GONE
         layoutPhotoInput.visibility = if (index == 1) View.VISIBLE else View.GONE
-        layoutManualInput.visibility = if (index == 2) View.VISIBLE else View.GONE
+        layoutManualInput.visibility = if (index == 0 || index == 2) View.VISIBLE else View.GONE
     }
 
     private fun observeCartItems() {
@@ -265,6 +277,9 @@ class FakeCartActivity : AppCompatActivity() {
     }
 
     private fun renderCartItems(products: List<FakeProduct>) {
+        latestProducts = products
+        selectedProductIds.retainAll(products.map { it.id }.toSet())
+        updateSelectionActions()
         cartItemsContainer.removeAllViews()
         val dec = DecimalFormat("#,###")
         val today = Calendar.getInstance().apply {
@@ -283,9 +298,12 @@ class FakeCartActivity : AppCompatActivity() {
             val dDayText = if (diffInDays <= 0L) "D-Day" else "D-$diffInDays"
 
             val itemView = LayoutInflater.from(this).inflate(R.layout.item_cart_product, cartItemsContainer, false)
+            val isSelected = selectedProductIds.contains(product.id)
+            (itemView as? CardView)?.setCardBackgroundColor(if (isSelected) Color.parseColor("#EEF2FF") else Color.WHITE)
             itemView.findViewById<TextView>(R.id.tvRemainingDays)?.text = dDayText
             itemView.findViewById<TextView>(R.id.tvProductName)?.text = product.name
             itemView.findViewById<TextView>(R.id.tvProductPrice)?.text = "${dec.format(product.price)}원"
+            itemView.findViewById<TextView>(R.id.tvProductUrl)?.text = product.url.ifEmpty { "URL 없음" }
             
             val ivProduct = itemView.findViewById<ImageView>(R.id.ivProduct)
             if (product.imageUrl.isNotEmpty()) {
@@ -296,10 +314,29 @@ class FakeCartActivity : AppCompatActivity() {
             else product.reasons.joinToString("\n") { "• $it" }
             itemView.findViewById<TextView>(R.id.tvReasonsSummary)?.text = reasonsText
 
-            itemView.findViewById<Button>(R.id.btnAddReason)?.setOnClickListener { showAddReasonPopup(product) }
+            val cbSelect = itemView.findViewById<CheckBox>(R.id.cbSelectProduct)
+            cbSelect.visibility = if (isSelectionMode()) View.VISIBLE else View.GONE
+            cbSelect.setOnCheckedChangeListener(null)
+            cbSelect.isChecked = isSelected
+            cbSelect.setOnCheckedChangeListener { _, _ -> toggleProductSelection(product.id) }
+
+            itemView.setOnLongClickListener {
+                enterSelectionMode(product.id)
+                true
+            }
+
+            itemView.findViewById<Button>(R.id.btnAddReason)?.apply {
+                visibility = if (isSelectionMode()) View.GONE else View.VISIBLE
+                setOnClickListener { showAddReasonPopup(product) }
+            }
 
             // [추가] 리스트 아이템 터치 시 URL 이동/복사 로직
             itemView.setOnClickListener {
+                if (isSelectionMode()) {
+                    toggleProductSelection(product.id)
+                    return@setOnClickListener
+                }
+
                 val isDDay = diffInDays <= 0
                 val reasonCount = product.reasons.size
                 val hasEnoughReasons = reasonCount >= 5
@@ -326,15 +363,17 @@ class FakeCartActivity : AppCompatActivity() {
                 }
             }
 
-            itemView.findViewById<ImageButton>(R.id.btnOptions)?.setOnClickListener { view ->
-                val popup = PopupMenu(this, view)
+            itemView.findViewById<ImageButton>(R.id.btnOptions)?.apply {
+                visibility = if (isSelectionMode()) View.GONE else View.VISIBLE
+                setOnClickListener { view ->
+                val popup = PopupMenu(this@FakeCartActivity, view)
                 popup.menu.add("수정")
                 popup.menu.add("삭제")
                 popup.setOnMenuItemClickListener { menuItem ->
                     when (menuItem.title) {
                         "수정" -> showEditProductPopup(product)
                         "삭제" -> {
-                            val deleteDialog = AlertDialog.Builder(this)
+                            val deleteDialog = AlertDialog.Builder(this@FakeCartActivity)
                                 .setTitle("상품 삭제")
                                 .setMessage("이 상품을 삭제하시겠습니까?")
                                 .setPositiveButton("삭제") { _, _ ->
@@ -352,9 +391,62 @@ class FakeCartActivity : AppCompatActivity() {
                     true
                 }
                 popup.show()
+                }
             }
             cartItemsContainer.addView(itemView)
         }
+    }
+
+    private fun isSelectionMode(): Boolean = selectedProductIds.isNotEmpty()
+
+    private fun enterSelectionMode(productId: String) {
+        selectedProductIds.add(productId)
+        renderCartItems(latestProducts)
+    }
+
+    private fun toggleProductSelection(productId: String) {
+        if (selectedProductIds.contains(productId)) selectedProductIds.remove(productId)
+        else selectedProductIds.add(productId)
+        renderCartItems(latestProducts)
+    }
+
+    private fun exitSelectionMode() {
+        selectedProductIds.clear()
+        renderCartItems(latestProducts)
+    }
+
+    private fun updateSelectionActions() {
+        val selectionMode = isSelectionMode()
+        btnAddProduct.visibility = if (selectionMode) View.GONE else View.VISIBLE
+        btnCancelSelection.visibility = if (selectionMode) View.VISIBLE else View.GONE
+        btnDeleteSelected.visibility = if (selectionMode) View.VISIBLE else View.GONE
+        btnDeleteSelected.text = "삭제 ${selectedProductIds.size}"
+    }
+
+    private fun confirmDeleteSelected() {
+        val selectedProducts = latestProducts.filter { selectedProductIds.contains(it.id) }
+        if (selectedProducts.isEmpty()) return
+
+        val deleteDialog = AlertDialog.Builder(this)
+            .setTitle("선택 상품 삭제")
+            .setMessage("${selectedProducts.size}개 상품을 삭제하시겠습니까?")
+            .setPositiveButton("삭제") { _, _ ->
+                lifecycleScope.launch {
+                    selectedProducts.forEach { repository.delete(it) }
+                    selectedProductIds.clear()
+                    withContext(Dispatchers.Main) {
+                        Toast.makeText(this@FakeCartActivity, "선택한 상품을 삭제했습니다.", Toast.LENGTH_SHORT).show()
+                        updateSelectionActions()
+                    }
+                }
+            }
+            .setNegativeButton("취소", null)
+            .create()
+        deleteDialog.setOnShowListener {
+            deleteDialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(Color.parseColor("#212121"))
+            deleteDialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(Color.parseColor("#212121"))
+        }
+        deleteDialog.show()
     }
 
     private fun showEditProductPopup(product: FakeProduct) {
@@ -410,7 +502,7 @@ class FakeCartActivity : AppCompatActivity() {
         lifecycleScope.launch {
             var name = etManualName.text.toString().trim()
             var price = etManualPrice.text.toString().toIntOrNull() ?: 0
-            val url = etUrlInput.text.toString().trim()
+            var url = etUrlInput.text.toString().trim()
             var imageUrl = ""
             val expiryDays = when(spExpiry.selectedItemPosition) {
                 0 -> 1; 1 -> 3; 2 -> 7; 3 -> 14; 4 -> 30; else -> 7
@@ -418,12 +510,29 @@ class FakeCartActivity : AppCompatActivity() {
 
             if (url.isNotEmpty()) {
                 try {
-                    val parsed = ProductParser.parse(url)
+                    Log.d("SHARE_DEBUG", "Parsing product url=$url sharedText=$name")
+                    val parsed = ProductParser.parse(url, name)
                     name = if (name.isEmpty()) (parsed.name ?: "") else name
                     price = if (price == 0) (parsed.price ?: 0) else price
                     imageUrl = parsed.imageUrl ?: ""
+                    url = parsed.resolvedUrl?.takeIf { it.isNotEmpty() } ?: url
+                    Log.d("SHARE_DEBUG", "Parsed result name=$name price=$price imageUrl=$imageUrl resolvedUrl=$url")
+                    withContext(Dispatchers.Main) {
+                        etManualName.setText(name)
+                        if (price > 0) etManualPrice.setText(price.toString())
+                        if (imageUrl.isNotEmpty()) {
+                            clearImageTint(ivPhotoPreview)
+                            Glide.with(this@FakeCartActivity).load(imageUrl).into(ivPhotoPreview)
+                        }
+                    }
                 } catch (e: Exception) {
                     Log.e("FakeCart", "Parsing error", e)
+                }
+            }
+
+            if (url.isEmpty()) {
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(this@FakeCartActivity, "상품 URL이 없어 사진/가격을 가져올 수 없습니다.", Toast.LENGTH_SHORT).show()
                 }
             }
 
@@ -468,6 +577,40 @@ class FakeCartActivity : AppCompatActivity() {
         etNewReason.setText("")
         ivPhotoPreview.setImageResource(android.R.drawable.ic_menu_camera)
         selectedImageUri = null
+    }
+
+    private fun previewSharedUrl() {
+        lifecycleScope.launch { validateAndSaveProductPreviewOnly() }
+    }
+
+    private suspend fun validateAndSaveProductPreviewOnly() {
+        var name = etManualName.text.toString().trim()
+        var price = etManualPrice.text.toString().toIntOrNull() ?: 0
+        val url = etUrlInput.text.toString().trim()
+        if (url.isEmpty()) return
+
+        try {
+            Log.d("SHARE_DEBUG", "Preview parsing url=$url sharedText=$name")
+            val parsed = ProductParser.parse(url, name)
+            name = if (name.isEmpty()) (parsed.name ?: "") else name
+            price = if (price == 0) (parsed.price ?: 0) else price
+            val imageUrl = parsed.imageUrl ?: ""
+            Log.d("SHARE_DEBUG", "Preview result name=$name price=$price imageUrl=$imageUrl resolvedUrl=${parsed.resolvedUrl}")
+            withContext(Dispatchers.Main) {
+                etManualName.setText(name)
+                if (price > 0) etManualPrice.setText(price.toString())
+                if (imageUrl.isNotEmpty()) {
+                    clearImageTint(ivPhotoPreview)
+                    Glide.with(this@FakeCartActivity).load(imageUrl).into(ivPhotoPreview)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e("FakeCart", "Preview parsing error", e)
+        }
+    }
+
+    private fun clearImageTint(imageView: ImageView) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) imageView.imageTintList = null
     }
 
     private fun processOcr(uri: Uri) {

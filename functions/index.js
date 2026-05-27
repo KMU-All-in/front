@@ -589,14 +589,236 @@ exports.generateMonthlyReport = onCall((request) => {
 
 const chromium = require('chrome-aws-lambda');
 const puppeteer = require('puppeteer-core');
+const http = require("http");
+const https = require("https");
+
+const PRODUCT_USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
+
+function cleanProductName(name) {
+  return String(name || "")
+    .replace(/\s+/g, " ")
+    .replace(/\s*[-|]\s*(무신사|MUSINSA|지그재그|ZIGZAG).*$/i, "")
+    .trim();
+}
+
+function extractPriceValue(value) {
+  if (value === null || value === undefined) return 0;
+  const text = String(value);
+  const cleaned = text.replace(/[^0-9]/g, "");
+  const price = parseInt(cleaned, 10);
+  return Number.isFinite(price) ? price : 0;
+}
+
+function extractPriceFromText(text) {
+  const content = String(text || "");
+  const patterns = [
+    /(?:판매가|할인가|쿠폰적용가|가격|price)["':\s]*([\d,]+)\s*원?/i,
+    /([\d,]+)\s*원/
+  ];
+
+  for (const pattern of patterns) {
+    const match = content.match(pattern);
+    const price = extractPriceValue(match && match[1]);
+    if (price > 0) return price;
+  }
+  return 0;
+}
+
+function extractSharedProduct(sharedText = "") {
+  const text = String(sharedText || "").trim();
+  if (!text) return { name: "", price: 0 };
+
+  const withoutUrl = text.replace(/https?:\/\/\S+/g, " ").replace(/\s+/g, " ").trim();
+  const price = extractPriceFromText(withoutUrl);
+  const name = cleanProductName(
+    withoutUrl
+      .replace(/[\d,]+\s*원/g, " ")
+      .replace(/\s+/g, " ")
+      .trim()
+  );
+
+  return { name, price };
+}
+
+function absolutizeUrl(value, baseUrl) {
+  if (!value) return "";
+  try {
+    return new URL(value, baseUrl).toString();
+  } catch (error) {
+    return value;
+  }
+}
+
+function requestUrl(url, options = {}) {
+  const { method = "GET", maxBytes = 700000, timeoutMs = 12000, redirectLimit = 5 } = options;
+
+  return new Promise((resolve, reject) => {
+    const client = url.startsWith("https://") ? https : http;
+    const req = client.request(url, {
+      method,
+      headers: {
+        "User-Agent": PRODUCT_USER_AGENT,
+        "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+        "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.7,en;q=0.6",
+        "Cache-Control": "no-cache",
+      },
+      timeout: timeoutMs,
+    }, (res) => {
+      const status = res.statusCode || 0;
+      const location = res.headers.location;
+      if ([301, 302, 303, 307, 308].includes(status) && location && redirectLimit > 0) {
+        res.resume();
+        const nextUrl = absolutizeUrl(location, url);
+        requestUrl(nextUrl, { ...options, method: "GET", redirectLimit: redirectLimit - 1 })
+          .then(resolve)
+          .catch(reject);
+        return;
+      }
+
+      const chunks = [];
+      let size = 0;
+      res.on("data", (chunk) => {
+        size += chunk.length;
+        if (size <= maxBytes) chunks.push(chunk);
+        else req.destroy();
+      });
+      res.on("end", () => {
+        resolve({
+          finalUrl: res.responseUrl || url,
+          status,
+          headers: res.headers,
+          body: Buffer.concat(chunks).toString("utf8"),
+        });
+      });
+    });
+
+    req.on("timeout", () => req.destroy(new Error("URL 요청 시간이 초과되었습니다.")));
+    req.on("error", reject);
+    req.end();
+  });
+}
+
+async function resolveProductUrl(url) {
+  try {
+    const response = await requestUrl(url, { method: "HEAD", maxBytes: 0, timeoutMs: 8000 });
+    return response.finalUrl || url;
+  } catch (error) {
+    try {
+      const response = await requestUrl(url, { method: "GET", maxBytes: 0, timeoutMs: 8000 });
+      return response.finalUrl || url;
+    } catch (ignored) {
+      return url;
+    }
+  }
+}
+
+function getMeta(html, names) {
+  for (const name of names) {
+    const patterns = [
+      new RegExp(`<meta[^>]+(?:property|name)=["']${name}["'][^>]+content=["']([^"']+)["'][^>]*>`, "i"),
+      new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${name}["'][^>]*>`, "i")
+    ];
+    for (const pattern of patterns) {
+      const match = html.match(pattern);
+      if (match && match[1]) return match[1].replace(/&amp;/g, "&").trim();
+    }
+  }
+  return "";
+}
+
+function findProductInJson(value) {
+  if (!value || typeof value !== "object") return null;
+  const type = value["@type"] || value.type;
+  const types = Array.isArray(type) ? type : [type];
+  if (types.some((item) => String(item).toLowerCase() === "product")) return value;
+
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      const found = findProductInJson(item);
+      if (found) return found;
+    }
+    return null;
+  }
+
+  for (const item of Object.values(value)) {
+    const found = findProductInJson(item);
+    if (found) return found;
+  }
+  return null;
+}
+
+function extractImageValue(value) {
+  if (typeof value === "string") return value;
+  if (Array.isArray(value)) return extractImageValue(value[0]);
+  if (value && typeof value === "object") return value.url || value.contentUrl || "";
+  return "";
+}
+
+function extractOfferPrice(offers) {
+  if (Array.isArray(offers)) return extractOfferPrice(offers[0]);
+  if (offers && typeof offers === "object") {
+    return extractPriceValue(offers.price || offers.lowPrice || offers.highPrice);
+  }
+  return 0;
+}
+
+function parseProductFromHtml(html, pageUrl, sharedText = "") {
+  const shared = extractSharedProduct(sharedText);
+  const jsonMatches = [...String(html || "").matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+  let jsonProduct = null;
+
+  for (const match of jsonMatches) {
+    try {
+      const parsed = JSON.parse(match[1].trim());
+      jsonProduct = findProductInJson(parsed);
+      if (jsonProduct) break;
+    } catch (error) {
+      // Ignore malformed script blocks.
+    }
+  }
+
+  const jsonName = jsonProduct ? cleanProductName(jsonProduct.name) : "";
+  const jsonImage = jsonProduct ? extractImageValue(jsonProduct.image) : "";
+  const jsonPrice = jsonProduct ? extractOfferPrice(jsonProduct.offers) : 0;
+
+  const metaName = cleanProductName(
+    getMeta(html, ["og:title", "twitter:title", "title"]) ||
+    (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "")
+  );
+  const metaImage = getMeta(html, ["og:image", "twitter:image"]);
+  const metaPrice = extractPriceValue(
+    getMeta(html, ["product:price:amount", "og:price:amount", "product:sale_price:amount", "twitter:data1"])
+  );
+
+  return {
+    name: jsonName || metaName || shared.name,
+    price: jsonPrice || metaPrice || shared.price || extractPriceFromText(html),
+    imageUrl: absolutizeUrl(jsonImage || metaImage, pageUrl),
+  };
+}
 
 exports.advancedProductParse = onCall(async (request) => {
-  const { url } = request.data || {};
+  const { url, sharedText = "" } = request.data || {};
   if (!url) throw new HttpsError("invalid-argument", "URL이 필요합니다.");
   
   let browser = null;
 
   try {
+    const resolvedUrl = await resolveProductUrl(url);
+    let productInfo = { name: "", price: 0, imageUrl: "" };
+
+    try {
+      const htmlResponse = await requestUrl(resolvedUrl, { method: "GET", timeoutMs: 12000 });
+      productInfo = parseProductFromHtml(htmlResponse.body, htmlResponse.finalUrl || resolvedUrl, sharedText);
+      productInfo.resolvedUrl = htmlResponse.finalUrl || resolvedUrl;
+    } catch (error) {
+      productInfo = { ...extractSharedProduct(sharedText), imageUrl: "", resolvedUrl };
+    }
+
+    if (productInfo.name && productInfo.price > 0 && productInfo.imageUrl) {
+      return { success: true, result: productInfo };
+    }
+
     browser = await puppeteer.launch({
       args: chromium.args,
       defaultViewport: chromium.defaultViewport,
@@ -607,27 +829,35 @@ exports.advancedProductParse = onCall(async (request) => {
     const page = await browser.newPage();
     
     // 유저 에이전트 설정 (매우 중요)
-    await page.setUserAgent('Mozilla/5.0 (iPhone; CPU iPhone OS 16_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.0 Mobile/15E148 Safari/604.1');
+    await page.setUserAgent(PRODUCT_USER_AGENT);
     
-    await page.goto(url, { waitUntil: 'networkidle2', timeout: 30000 });
+    await page.goto(productInfo.resolvedUrl || resolvedUrl, { waitUntil: 'networkidle2', timeout: 30000 });
 
-    // 에이블리/쿠팡 등에서 데이터 추출
-    const productInfo = await page.evaluate(() => {
-      // 1. 가격 추출 (에이블리 특화 선택자 예시)
-      const priceText = document.querySelector('.price, [class*="Price"], [class*="price"]')?.innerText || "";
-      const price = parseInt(priceText.replace(/[^0-9]/g, "")) || 0;
+    const renderedInfo = await page.evaluate(() => {
+      const textOf = (selector) => document.querySelector(selector)?.textContent?.trim() || "";
+      const meta = (selector) => document.querySelector(selector)?.content || "";
+      const priceText = [
+        meta('meta[property="product:price:amount"]'),
+        meta('meta[property="og:price:amount"]'),
+        textOf('[class*="price" i]'),
+        textOf('[class*="sale" i]'),
+        document.body?.innerText || ""
+      ].find(Boolean) || "";
 
-      // 2. 상품명 추출
-      const name = document.querySelector('meta[property="og:title"]')?.content || 
-                   document.querySelector('meta[name="twitter:title"]')?.content || 
-                   document.title;
-
-      // 3. 이미지 추출
-      const imageUrl = document.querySelector('meta[property="og:image"]')?.content || 
-                       document.querySelector('meta[name="twitter:image"]')?.content || "";
-
-      return { name, price, imageUrl };
+      return {
+        name: meta('meta[property="og:title"]') || meta('meta[name="twitter:title"]') || document.title,
+        priceText,
+        imageUrl: meta('meta[property="og:image"]') || meta('meta[name="twitter:image"]') || "",
+      };
     });
+
+    const shared = extractSharedProduct(sharedText);
+    productInfo = {
+      name: cleanProductName(productInfo.name || renderedInfo.name || shared.name),
+      price: productInfo.price || extractPriceFromText(renderedInfo.priceText) || shared.price,
+      imageUrl: productInfo.imageUrl || absolutizeUrl(renderedInfo.imageUrl, productInfo.resolvedUrl || resolvedUrl),
+      resolvedUrl: productInfo.resolvedUrl || resolvedUrl,
+    };
 
     return { success: true, result: productInfo };
 
@@ -638,4 +868,3 @@ exports.advancedProductParse = onCall(async (request) => {
     if (browser !== null) await browser.close();
   }
 });
-

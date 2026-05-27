@@ -19,6 +19,13 @@
             android:orientation="horizontal"
             android:gravity="center_vertical">
 
+            <CheckBox
+                android:id="@+id/cbSelectProduct"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:buttonTint="#4F6FFF"
+                android:visibility="gone" />
+
             <androidx.cardview.widget.CardView
                 android:layout_width="80dp"
                 android:layout_height="80dp"

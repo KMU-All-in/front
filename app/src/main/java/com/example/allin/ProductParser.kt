@@ -16,10 +16,11 @@ object ProductParser {
     data class ParsedProduct(
         var name: String? = null,
         var price: Int? = null,
-        var imageUrl: String? = null
+        var imageUrl: String? = null,
+        var resolvedUrl: String? = null
     )
 
-    suspend fun parse(url: String): ParsedProduct {
+    suspend fun parse(url: String, sharedText: String = ""): ParsedProduct {
         val result = ParsedProduct()
         
         // 1. 클라이언트 사이드 Jsoup 파싱 시도
@@ -43,11 +44,11 @@ object ProductParser {
                     val data = jsonLd.data().trim()
                     if (data.isEmpty()) continue
                     val json = if (data.startsWith("[")) JSONArray(data).optJSONObject(0) else JSONObject(data)
-                    val productData = findProductInJson(json)
-                    if (productData != null) {
-                        result.name = result.name ?: productData.optString("name").takeIf { it.isNotEmpty() }
-                        result.imageUrl = result.imageUrl ?: productData.optString("image").takeIf { it.isNotEmpty() }
-                        val offers = productData.opt("offers")
+                        val productData = findProductInJson(json)
+                        if (productData != null) {
+                            result.name = result.name ?: productData.optString("name").takeIf { it.isNotEmpty() }
+                            result.imageUrl = result.imageUrl ?: extractImage(productData.opt("image"))
+                            val offers = productData.opt("offers")
                         if (offers is JSONObject) {
                             val p = extractPrice(offers.opt("price"))
                             if (p != null) result.price = result.price ?: p
@@ -102,7 +103,9 @@ object ProductParser {
             
             // 이미지 절대 경로 변환
             if (!result.imageUrl.isNullOrEmpty() && !result.imageUrl!!.startsWith("http")) {
-                result.imageUrl = doc.absUrl("meta[property=og:image]")
+                result.imageUrl = doc.select("meta[property=og:image]").firstOrNull()?.absUrl("content")
+                    ?.takeIf { it.isNotEmpty() }
+                    ?: result.imageUrl
             }
 
         } catch (e: Exception) {
@@ -112,11 +115,12 @@ object ProductParser {
         // 2. 정보가 부족할 경우 서버 사이드 파싱(Puppeteer) 시도
         if (result.name.isNullOrEmpty() || (result.price ?: 0) <= 0) {
             try {
-                val serverResult = fetchFromServer(url)
+                val serverResult = fetchFromServer(url, sharedText)
                 if (serverResult != null) {
                     result.name = result.name ?: serverResult.name
                     result.price = if ((result.price ?: 0) <= 0) serverResult.price else result.price
                     result.imageUrl = result.imageUrl ?: serverResult.imageUrl
+                    result.resolvedUrl = serverResult.resolvedUrl
                 }
             } catch (e: Exception) {
                 Log.e("ProductParser", "Server parse error: ${e.message}")
@@ -126,9 +130,12 @@ object ProductParser {
         return result
     }
 
-    private suspend fun fetchFromServer(url: String): ParsedProduct? {
+    private suspend fun fetchFromServer(url: String, sharedText: String): ParsedProduct? {
         val functions = FirebaseFunctions.getInstance()
-        val data = hashMapOf("url" to url)
+        val data = hashMapOf(
+            "url" to url,
+            "sharedText" to sharedText
+        )
 
         return try {
             val result = functions.getHttpsCallable("advancedProductParse")
@@ -141,7 +148,8 @@ object ProductParser {
                 ParsedProduct(
                     name = res?.get("name") as? String,
                     price = (res?.get("price") as? Number)?.toInt(),
-                    imageUrl = res?.get("imageUrl") as? String
+                    imageUrl = res?.get("imageUrl") as? String,
+                    resolvedUrl = res?.get("resolvedUrl") as? String
                 )
             } else null
         } catch (e: Exception) {
@@ -175,5 +183,14 @@ object ProductParser {
         if (value == null) return null
         val str = value.toString().replace(Regex("[^0-9]"), "")
         return str.toIntOrNull()
+    }
+
+    private fun extractImage(value: Any?): String? {
+        return when (value) {
+            is String -> value.takeIf { it.isNotEmpty() }
+            is JSONArray -> value.optString(0).takeIf { it.isNotEmpty() }
+            is JSONObject -> value.optString("url").takeIf { it.isNotEmpty() }
+            else -> null
+        }
     }
 }

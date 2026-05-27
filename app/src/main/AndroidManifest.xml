@@ -53,9 +53,20 @@
             android:excludeFromRecents="true"
             android:launchMode="singleTask"
             android:taskAffinity="" />
+
+        <!-- [수정] 모든 종류의 공유(단일/다중 데이터)를 받도록 설정 -->
         <activity
             android:name=".MainActivity"
-            android:exported="false" />
+            android:exported="true"
+            android:windowSoftInputMode="adjustPan">
+            
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
 
         <service
             android:name=".worker.AppMonitorService"
@@ -75,13 +86,8 @@
 
         <activity 
             android:name=".FakeCartActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
-            </intent-filter>
-        </activity>
+            android:exported="false" />
         
     </application>
 
