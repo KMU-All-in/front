@@ -99,9 +99,12 @@ const categoryRules = [
   {
     category: "식품/음료",
     confidence: 0.9,
+    exactKeywords: [
+      "cu"
+    ],
     keywords: [
       "gs25",
-      "cu",
+      "씨유",
       "세븐일레븐",
       "이마트24",
       "카페",
@@ -128,6 +131,22 @@ const categoryRules = [
       "버거킹",
       "롯데리아",
       "맘스터치",
+      "kfc",
+      "노브랜드버거",
+      "파리바게뜨",
+      "파리바게트",
+      "뚜레쥬르",
+      "베스킨라빈스",
+      "배스킨라빈스",
+      "던킨",
+      "서브웨이",
+      "홍콩반점",
+      "본죽",
+      "한솥",
+      "봉구스",
+      "엽떡",
+      "두끼",
+      "명랑핫도그",
       "배달",
       "배달의민족",
       "요기요",
@@ -161,14 +180,25 @@ const categoryRules = [
       "브랜디",
       "29cm",
       "w컨셉",
+      "크림",
+      "kream",
+      "퀸잇",
+      "하이버",
       "유니클로",
       "자라",
       "스파오",
       "탑텐",
+      "무탠다드",
+      "지오다노",
+      "h&m",
+      "cos",
+      "에잇세컨즈",
       "나이키",
       "아디다스",
       "뉴발란스",
-      "abc마트"
+      "abc마트",
+      "폴더",
+      "슈마커"
     ]
   },
   {
@@ -182,11 +212,20 @@ const categoryRules = [
       "미용실",
       "네일",
       "피부",
+      "올영",
+      "컬리뷰티",
+      "시코르",
+      "chicor",
       "에뛰드",
       "이니스프리",
       "아리따움",
       "미샤",
       "토니모리",
+      "마녀공장",
+      "닥터지",
+      "라운드랩",
+      "롬앤",
+      "클리오",
       "롭스",
       "랄라블라",
       "무신사뷰티"
@@ -214,7 +253,10 @@ const categoryRules = [
       "스마트폰",
       "쿠팡전자",
       "프리스비",
-      "윌리스"
+      "윌리스",
+      "다나와",
+      "컴퓨존",
+      "아이코다"
     ]
   },
   {
@@ -228,6 +270,14 @@ const categoryRules = [
       "알라딘",
       "예스24",
       "yes24",
+      "리디",
+      "밀리의서재",
+      "윌라",
+      "카카오페이지",
+      "네이버웹툰",
+      "레진",
+      "문피아",
+      "북앤라이프",
       "문구",
       "문구점",
       "아트박스",
@@ -269,7 +319,12 @@ const categoryRules = [
       "오늘의집",
       "한샘",
       "이케아",
-      "ikea"
+      "ikea",
+      "마켓컬리",
+      "컬리",
+      "ssg",
+      "쓱",
+      "롯데온"
     ]
   },
   {
@@ -294,10 +349,26 @@ const categoryRules = [
       "클라이밍",
       "등산",
       "자전거",
-      "스포츠센터"
+      "스포츠센터",
+      "데카트론",
+      "젝시믹스",
+      "안다르",
+      "뮬라웨어",
+      "야놀자",
+      "여기어때",
+      "인터파크티켓"
     ]
   }
 ];
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function hasExactKeyword(text, keyword) {
+  const pattern = new RegExp(`(^|[^0-9a-z가-힣])${escapeRegExp(keyword)}([^0-9a-z가-힣]|$)`, "i");
+  return pattern.test(text);
+}
 
 function classifyCategoryWithConfidence(storeName, fullText = "") {
   const lowerStore = String(storeName || "").toLowerCase();
@@ -308,13 +379,18 @@ function classifyCategoryWithConfidence(storeName, fullText = "") {
       const lowerKeyword = String(keyword).toLowerCase();
       return lowerStore.includes(lowerKeyword) || lowerText.includes(lowerKeyword);
     });
+    const exactMatchedKeywords = (rule.exactKeywords || []).filter((keyword) => {
+      const lowerKeyword = String(keyword).toLowerCase();
+      return hasExactKeyword(lowerStore, lowerKeyword) || hasExactKeyword(lowerText, lowerKeyword);
+    });
+    const allMatchedKeywords = [...matchedKeywords, ...exactMatchedKeywords];
 
-    if (matchedKeywords.length > 0) {
+    if (allMatchedKeywords.length > 0) {
       return {
         category: rule.category,
         confidence: rule.confidence,
         source: "rule",
-        matchedKeywords
+        matchedKeywords: allMatchedKeywords
       };
     }
   }
