@@ -718,11 +718,6 @@ exports.classifyCategory = onCall((request) => {
   };
 });
 
-exports.classifyCategory = onCall((request) => {
-  const { storeName = "", fullText = "" } = request.data || {};
-  return { success: true, category: classifyCategory(storeName, fullText) };
-});
-
 // -----------------------------
 // BudgetAnalyzer
 // -----------------------------
