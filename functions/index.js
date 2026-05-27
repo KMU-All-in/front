@@ -11,6 +11,8 @@ function getOpenAIClient() {
   });
 }
 
+const openai = getOpenAIClient();
+
 const fieldMap = {
   date: ["date", "payment_date", "paymentDate", "used_at", "승인일자", "결제일", "이용일자", "거래일자"],
   amount: ["amount", "price", "payment_amount", "paymentAmount", "이용금액", "결제금액", "거래금액", "금액"],
@@ -330,12 +332,12 @@ function classifyCategory(storeName, fullText = "") {
 }
 
 async function classifyCategoryWithAI(storeName, fullText = "") {
-  if (!process.env.OPENAI_API_KEY) {
+  if (!openai) {
     return {
       category: "기타",
       confidence: 0.3,
       source: "ai",
-      reason: "OPENAI_API_KEY가 설정되지 않았습니다."
+      reason: "OpenAI 클라이언트가 초기화되지 않았습니다."
     };
   }
 
@@ -1010,4 +1012,3 @@ exports.advancedProductParse = onCall(async (request) => {
     if (browser !== null) await browser.close();
   }
 });
-
