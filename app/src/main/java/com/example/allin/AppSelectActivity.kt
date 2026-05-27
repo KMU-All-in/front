@@ -19,6 +19,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import androidx.core.view.WindowCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
+import android.text.Editable
+import android.text.TextWatcher
 
 data class AppInfo(
     val name: String,
@@ -35,6 +40,9 @@ class AppSelectActivity : AppCompatActivity() {
     private lateinit var btnDone: Button
     
     private lateinit var repository: LockedAppRepository
+
+    private lateinit var btnBack: ImageButton
+    private lateinit var etSearchApp: EditText
     
     // 쇼핑 앱 판단 키워드
     private val shoppingKeywords = listOf(
@@ -47,6 +55,7 @@ class AppSelectActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_app_select)
+        hideSystemBars()
 
         val dao = AppDatabase.getDatabase(applicationContext).lockedAppDao()
         repository = LockedAppRepository(dao)
@@ -54,14 +63,40 @@ class AppSelectActivity : AppCompatActivity() {
         rvAppList = findViewById(R.id.rvAppList)
         loadingProgress = findViewById(R.id.loadingProgress)
         btnDone = findViewById(R.id.btnDone)
+        btnBack = findViewById(R.id.btnBack)
+        etSearchApp = findViewById(R.id.etSearchApp)
 
         rvAppList.layoutManager = LinearLayoutManager(this)
-        
+
         loadInstalledApps()
+
+        btnBack.setOnClickListener {
+            finish()
+        }
 
         btnDone.setOnClickListener {
             saveSelectedApps()
         }
+
+        etSearchApp.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(
+                s: CharSequence?,
+                start: Int,
+                count: Int,
+                after: Int
+            ) = Unit
+
+            override fun onTextChanged(
+                s: CharSequence?,
+                start: Int,
+                before: Int,
+                count: Int
+            ) {
+                (rvAppList.adapter as? AppAdapter)?.filter(s?.toString().orEmpty())
+            }
+
+            override fun afterTextChanged(s: Editable?) = Unit
+        })
     }
 
     private fun loadInstalledApps() {
@@ -156,33 +191,72 @@ class AppSelectActivity : AppCompatActivity() {
     }
 
     inner class AppAdapter(private val apps: List<AppInfo>) : RecyclerView.Adapter<AppAdapter.ViewHolder>() {
+        private val visibleApps = apps.toMutableList()
+
         fun getSelectedApps() = apps.filter { it.isSelected }
+
+        fun filter(query: String) {
+            val keyword = query.trim().lowercase()
+            visibleApps.clear()
+
+            if (keyword.isEmpty()) {
+                visibleApps.addAll(apps)
+            } else {
+                visibleApps.addAll(
+                    apps.filter {
+                        it.name.lowercase().contains(keyword) ||
+                                it.packageName.lowercase().contains(keyword)
+                    }
+                )
+            }
+
+            notifyDataSetChanged()
+        }
+
         override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
             val view = LayoutInflater.from(parent.context).inflate(R.layout.item_app_select, parent, false)
             return ViewHolder(view)
         }
+
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
-            val app = apps[position]
+            val app = visibleApps[position]
             holder.ivIcon.setImageDrawable(app.icon)
             holder.tvName.text = app.name
             holder.tvPackage.text = app.packageName
             holder.cbSelect.isChecked = app.isSelected
+
             holder.itemView.setOnClickListener {
                 app.isSelected = !app.isSelected
                 holder.cbSelect.isChecked = app.isSelected
             }
+
             if (app.isShopping) {
                 holder.tvName.setTextColor(resources.getColor(R.color.purple_500, null))
             } else {
                 holder.tvName.setTextColor(resources.getColor(android.R.color.black, null))
             }
         }
-        override fun getItemCount() = apps.size
+
+        override fun getItemCount() = visibleApps.size
+
         inner class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
             val ivIcon: ImageView = view.findViewById(R.id.ivAppIcon)
             val tvName: TextView = view.findViewById(R.id.tvAppName)
             val tvPackage: TextView = view.findViewById(R.id.tvPackageName)
             val cbSelect: CheckBox = view.findViewById(R.id.cbSelect)
         }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideSystemBars()
+    }
+
+    private fun hideSystemBars() {
+        WindowCompat.setDecorFitsSystemWindows(window, false)
+        val windowInsetsController = WindowCompat.getInsetsController(window, window.decorView)
+        windowInsetsController.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
     }
 }

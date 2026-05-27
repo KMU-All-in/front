@@ -1,4 +1,17 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const OpenAI = require("openai");
+
+function getOpenAIClient() {
+  if (!process.env.OPENAI_API_KEY) {
+    return null;
+  }
+
+  return new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY
+  });
+}
+
+const openai = getOpenAIClient();
 
 const fieldMap = {
   date: ["date", "payment_date", "paymentDate", "used_at", "승인일자", "결제일", "이용일자", "거래일자"],
@@ -71,19 +84,433 @@ function normalizeAmount(value) {
   return Number(cleaned);
 }
 
-function classifyCategory(storeName, fullText = "") {
+const allowedCategories = [
+  "식품/음료",
+  "패션/의류",
+  "뷰티/화장품",
+  "전자기기",
+  "도서/문구",
+  "생활용품",
+  "스포츠/레저",
+  "기타"
+];
+
+const categoryRules = [
+  {
+    category: "식품/음료",
+    confidence: 0.9,
+    exactKeywords: [
+      "cu"
+    ],
+    keywords: [
+      "gs25",
+      "씨유",
+      "세븐일레븐",
+      "이마트24",
+      "카페",
+      "커피",
+      "스타벅스",
+      "이디야",
+      "메가커피",
+      "메가엠지씨",
+      "투썸",
+      "빽다방",
+      "컴포즈",
+      "공차",
+      "식당",
+      "음식점",
+      "분식",
+      "김밥",
+      "국밥",
+      "고기",
+      "삼겹살",
+      "치킨",
+      "피자",
+      "버거",
+      "맥도날드",
+      "버거킹",
+      "롯데리아",
+      "맘스터치",
+      "kfc",
+      "노브랜드버거",
+      "파리바게뜨",
+      "파리바게트",
+      "뚜레쥬르",
+      "베스킨라빈스",
+      "배스킨라빈스",
+      "던킨",
+      "서브웨이",
+      "홍콩반점",
+      "본죽",
+      "한솥",
+      "봉구스",
+      "엽떡",
+      "두끼",
+      "명랑핫도그",
+      "배달",
+      "배달의민족",
+      "요기요",
+      "쿠팡이츠",
+      "별차이나",
+      "중식",
+      "중국집",
+      "반점",
+      "마라",
+      "짜장",
+      "짬뽕"
+    ]
+  },
+  {
+    category: "패션/의류",
+    confidence: 0.9,
+    keywords: [
+      "백화점",
+      "쇼핑",
+      "쇼핑몰",
+      "몰",
+      "의류",
+      "패션",
+      "옷",
+      "신발",
+      "가방",
+      "잡화",
+      "무신사",
+      "지그재그",
+      "에이블리",
+      "브랜디",
+      "29cm",
+      "w컨셉",
+      "크림",
+      "kream",
+      "퀸잇",
+      "하이버",
+      "유니클로",
+      "자라",
+      "스파오",
+      "탑텐",
+      "무탠다드",
+      "지오다노",
+      "h&m",
+      "cos",
+      "에잇세컨즈",
+      "나이키",
+      "아디다스",
+      "뉴발란스",
+      "abc마트",
+      "폴더",
+      "슈마커"
+    ]
+  },
+  {
+    category: "뷰티/화장품",
+    confidence: 0.9,
+    keywords: [
+      "올리브영",
+      "화장품",
+      "뷰티",
+      "헤어",
+      "미용실",
+      "네일",
+      "피부",
+      "올영",
+      "컬리뷰티",
+      "시코르",
+      "chicor",
+      "에뛰드",
+      "이니스프리",
+      "아리따움",
+      "미샤",
+      "토니모리",
+      "마녀공장",
+      "닥터지",
+      "라운드랩",
+      "롬앤",
+      "클리오",
+      "롭스",
+      "랄라블라",
+      "무신사뷰티"
+    ]
+  },
+  {
+    category: "전자기기",
+    confidence: 0.9,
+    keywords: [
+      "하이마트",
+      "전자",
+      "전자랜드",
+      "애플",
+      "apple",
+      "삼성",
+      "samsung",
+      "lg전자",
+      "컴퓨터",
+      "노트북",
+      "아이폰",
+      "아이패드",
+      "맥북",
+      "에어팟",
+      "휴대폰",
+      "스마트폰",
+      "쿠팡전자",
+      "프리스비",
+      "윌리스",
+      "다나와",
+      "컴퓨존",
+      "아이코다"
+    ]
+  },
+  {
+    category: "도서/문구",
+    confidence: 0.9,
+    keywords: [
+      "서점",
+      "교보",
+      "교보문고",
+      "영풍문고",
+      "알라딘",
+      "예스24",
+      "yes24",
+      "리디",
+      "밀리의서재",
+      "윌라",
+      "카카오페이지",
+      "네이버웹툰",
+      "레진",
+      "문피아",
+      "북앤라이프",
+      "문구",
+      "문구점",
+      "아트박스",
+      "핫트랙스",
+      "학원",
+      "학교",
+      "대학교",
+      "복사",
+      "인쇄",
+      "프린트",
+      "스터디",
+      "독서실",
+      "스카",
+      "스터디카페"
+    ]
+  },
+  {
+    category: "생활용품",
+    confidence: 0.9,
+    keywords: [
+      "이마트",
+      "홈플러스",
+      "롯데마트",
+      "마트",
+      "코스트코",
+      "트레이더스",
+      "다이소",
+      "생활",
+      "생활용품",
+      "잡화",
+      "세탁",
+      "빨래방",
+      "크린토피아",
+      "편의용품",
+      "주방",
+      "욕실",
+      "청소",
+      "가구",
+      "오늘의집",
+      "한샘",
+      "이케아",
+      "ikea",
+      "마켓컬리",
+      "컬리",
+      "ssg",
+      "쓱",
+      "롯데온"
+    ]
+  },
+  {
+    category: "스포츠/레저",
+    confidence: 0.9,
+    keywords: [
+      "헬스",
+      "헬스장",
+      "피트니스",
+      "짐",
+      "요가",
+      "필라테스",
+      "축구",
+      "스포츠",
+      "레저",
+      "골프",
+      "스크린골프",
+      "볼링",
+      "수영",
+      "테니스",
+      "배드민턴",
+      "클라이밍",
+      "등산",
+      "자전거",
+      "스포츠센터",
+      "데카트론",
+      "젝시믹스",
+      "안다르",
+      "뮬라웨어",
+      "야놀자",
+      "여기어때",
+      "인터파크티켓"
+    ]
+  }
+];
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function hasExactKeyword(text, keyword) {
+  const pattern = new RegExp(`(^|[^0-9a-z가-힣])${escapeRegExp(keyword)}([^0-9a-z가-힣]|$)`, "i");
+  return pattern.test(text);
+}
+
+function classifyCategoryWithConfidence(storeName, fullText = "") {
   const lowerStore = String(storeName || "").toLowerCase();
   const lowerText = String(fullText || "").toLowerCase();
-  const check = (keywords) => keywords.some(kw => lowerStore.includes(kw) || lowerText.includes(kw));
 
-  if (check(["gs25", "cu", "세븐일레븐", "이마트24", "카페", "커피", "식당", "음식점", "배달", "치킨", "피자", "별차이나", "중식", "중국집", "반점", "마라", "짜장", "짬뽕"])) return "식품/음료";
-  if (check(["백화점", "쇼핑", "몰", "의류", "패션", "무신사", "지그재그"])) return "패션/의류";
-  if (check(["올리브영", "화장품", "뷰티", "헤어", "미용실"])) return "뷰티/화장품";
-  if (check(["하이마트", "전자", "애플", "삼성", "컴퓨터"])) return "전자기기";
-  if (check(["서점", "교보", "문구", "다이소", "학원", "학교"])) return "도서/문구";
-  if (check(["이마트", "홈플러스", "롯데마트", "마트", "다이소", "생활", "세탁"])) return "생활용품";
-  if (check(["헬스", "축구", "스포츠", "레저", "골프"])) return "스포츠/레저";
-  return "기타";
+  for (const rule of categoryRules) {
+    const matchedKeywords = rule.keywords.filter((keyword) => {
+      const lowerKeyword = String(keyword).toLowerCase();
+      return lowerStore.includes(lowerKeyword) || lowerText.includes(lowerKeyword);
+    });
+    const exactMatchedKeywords = (rule.exactKeywords || []).filter((keyword) => {
+      const lowerKeyword = String(keyword).toLowerCase();
+      return hasExactKeyword(lowerStore, lowerKeyword) || hasExactKeyword(lowerText, lowerKeyword);
+    });
+    const allMatchedKeywords = [...matchedKeywords, ...exactMatchedKeywords];
+
+    if (allMatchedKeywords.length > 0) {
+      return {
+        category: rule.category,
+        confidence: rule.confidence,
+        source: "rule",
+        matchedKeywords: allMatchedKeywords
+      };
+    }
+  }
+
+  return {
+    category: "기타",
+    confidence: 0.3,
+    source: "rule",
+    matchedKeywords: []
+  };
+}
+
+function classifyCategory(storeName, fullText = "") {
+  return classifyCategoryWithConfidence(storeName, fullText).category;
+}
+
+async function classifyCategoryWithAI(storeName, fullText = "") {
+  if (!openai) {
+    return {
+      category: "기타",
+      confidence: 0.3,
+      source: "ai",
+      reason: "OpenAI 클라이언트가 초기화되지 않았습니다."
+    };
+  }
+
+  const input = {
+    storeName: String(storeName || ""),
+    fullText: String(fullText || ""),
+    allowedCategories
+  };
+
+  try {
+    const completion = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      temperature: 0,
+      messages: [
+        {
+          role: "system",
+          content: `
+너는 결제내역 카테고리 분류 엔진이다.
+입력된 결제처와 결제문구를 보고 허용 카테고리 중 하나만 선택한다.
+
+규칙:
+- 반드시 JSON만 반환한다.
+- category는 allowedCategories 중 하나만 사용한다.
+- 확실하지 않으면 "기타"로 분류하고 confidence를 0.5 이하로 둔다.
+- 결제처가 PG사/간편결제명만 있으면 실제 사용처가 불명확하므로 confidence를 낮게 둔다.
+- 개인정보를 추론하지 않는다.
+`
+        },
+        {
+          role: "user",
+          content: JSON.stringify(input)
+        }
+      ],
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "payment_category_result",
+          strict: true,
+          schema: {
+            type: "object",
+            additionalProperties: false,
+            properties: {
+              category: {
+                type: "string",
+                enum: allowedCategories
+              },
+              confidence: {
+                type: "number"
+              },
+              reason: {
+                type: "string"
+              }
+            },
+            required: ["category", "confidence", "reason"]
+          }
+        }
+      }
+    });
+
+    const content = completion.choices[0].message.content;
+    const parsed = JSON.parse(content);
+
+    return {
+      category: allowedCategories.includes(parsed.category) ? parsed.category : "기타",
+      confidence: Math.max(0, Math.min(1, Number(parsed.confidence) || 0.5)),
+      source: "ai",
+      reason: parsed.reason || ""
+    };
+  } catch (error) {
+    console.error("AI category classification failed:", error);
+
+    return {
+      category: "기타",
+      confidence: 0.3,
+      source: "ai",
+      reason: "AI 호출 실패"
+    };
+  }
+}
+
+async function classifyCategorySmart(storeName, fullText = "") {
+  const ruleResult = classifyCategoryWithConfidence(storeName, fullText);
+
+  if (ruleResult.category !== "기타" && ruleResult.confidence >= 0.85) {
+    return {
+      ...ruleResult,
+      usedAI: false
+    };
+  }
+
+  const aiResult = await classifyCategoryWithAI(storeName, fullText);
+
+  return {
+    ...aiResult,
+    usedAI: true,
+    ruleResult
+  };
 }
 
 function extractAmountFromText(content) {
@@ -223,45 +650,54 @@ function inferPaymentItem(item) {
   return parsed;
 }
 
-exports.parsePaymentData = onCall((request) => {
-  const data = request.data;
-  if (!data || !data.paymentData) throw new HttpsError("invalid-argument", "paymentData 필요");
-  try {
-    const parsedList = data.paymentData.map(item => inferPaymentItem(item));
-    return {
-      success: true,
-      result: {
-        validData: parsedList.filter(i => i.isValid),
-        invalidData: parsedList.filter(i => !i.isValid)
-      }
-    };
-  } catch (error) {
-    throw new HttpsError("internal", error.message);
-  }
-});
-
-exports.parseNotification = onCall((request) => {
+exports.parseNotification = onCall(async (request) => {
   const { title = "", text = "" } = request.data || {};
   const fullText = `${title} ${text}`.trim();
-  if (!fullText) throw new HttpsError("invalid-argument", "내용이 없습니다.");
 
-  const excludeKeywords = ["입금", "환불", "취소", "입금완료", "(광고)", "광고", "모임통장", "모임 통장"];
-  if (excludeKeywords.some(kw => fullText.includes(kw))) return { success: false, reason: "excluded" };
+  if (!fullText) {
+    throw new HttpsError("invalid-argument", "내용이 없습니다.");
+  }
+
+  const excludeKeywords = [
+    "입금",
+    "환불",
+    "취소",
+    "입금완료",
+    "(광고)",
+    "광고",
+    "모임통장",
+    "모임 통장"
+  ];
+
+  if (excludeKeywords.some(kw => fullText.includes(kw))) {
+    return { success: false, reason: "excluded" };
+  }
 
   const payKeywords = ["승인", "결제", "일시불", "출금", "카드승인", "자동이체"];
-  if (!payKeywords.some(kw => fullText.includes(kw))) return { success: false, reason: "not_payment" };
+
+  if (!payKeywords.some(kw => fullText.includes(kw))) {
+    return { success: false, reason: "not_payment" };
+  }
 
   const amount = extractAmountFromText(fullText);
-  if (amount <= 0) return { success: false, reason: "amount_not_found" };
+
+  if (amount <= 0) {
+    return { success: false, reason: "amount_not_found" };
+  }
 
   const storeName = extractStoreNameFromNotification(title, text, fullText);
+  const categoryResult = await classifyCategorySmart(storeName, fullText);
 
   return {
     success: true,
     result: {
       amount,
       storeName,
-      category: classifyCategory(storeName, fullText),
+      category: categoryResult.category,
+      categoryConfidence: categoryResult.confidence,
+      categorySource: categoryResult.source,
+      usedAI: categoryResult.usedAI,
+      categoryReason: categoryResult.reason || "",
       date: new Date().getTime(),
       originalText: fullText
     }
@@ -270,7 +706,16 @@ exports.parseNotification = onCall((request) => {
 
 exports.classifyCategory = onCall((request) => {
   const { storeName = "", fullText = "" } = request.data || {};
-  return { success: true, category: classifyCategory(storeName, fullText) };
+
+  const categoryResult = classifyCategoryWithConfidence(storeName, fullText);
+
+  return {
+    success: true,
+    category: categoryResult.category,
+    confidence: categoryResult.confidence,
+    source: categoryResult.source,
+    matchedKeywords: categoryResult.matchedKeywords
+  };
 });
 
 // -----------------------------
