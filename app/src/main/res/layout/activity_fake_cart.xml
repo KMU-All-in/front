@@ -43,32 +43,71 @@
             android:textSize="12sp"
             app:cornerRadius="8dp" />
         <Button
-            android:id="@+id/btnCancelSelection"
+            android:id="@+id/btnStartSelection"
             android:layout_width="wrap_content"
             android:layout_height="40dp"
-            android:layout_marginEnd="8dp"
+            android:layout_marginStart="8dp"
+            android:backgroundTint="#F2F4F8"
+            android:text="선택하기"
+            android:textColor="@android:color/black"
+            android:textSize="12sp"
+            app:cornerRadius="8dp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/selectionBar"
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:layout_below="@id/topBar"
+        android:background="@android:color/white"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="20dp"
+        android:paddingEnd="20dp"
+        android:visibility="gone">
+
+        <CheckBox
+            android:id="@+id/cbSelectAllProducts"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:buttonTint="#4F6FFF"
+            android:text="상품 전체 선택"
+            android:textColor="#424242"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <Space
+            android:layout_width="0dp"
+            android:layout_height="1dp"
+            android:layout_weight="1" />
+
+        <Button
+            android:id="@+id/btnDeleteSelected"
+            android:layout_width="wrap_content"
+            android:layout_height="38dp"
+            android:backgroundTint="#E53935"
+            android:text="선택한 상품 삭제"
+            android:textColor="@android:color/white"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            app:cornerRadius="4dp" />
+
+        <Button
+            android:id="@+id/btnCancelSelection"
+            android:layout_width="wrap_content"
+            android:layout_height="38dp"
+            android:layout_marginStart="8dp"
             android:backgroundTint="#F2F4F8"
             android:text="취소"
             android:textColor="@android:color/black"
             android:textSize="12sp"
-            android:visibility="gone"
-            app:cornerRadius="8dp" />
-        <Button
-            android:id="@+id/btnDeleteSelected"
-            android:layout_width="wrap_content"
-            android:layout_height="40dp"
-            android:backgroundTint="#E53935"
-            android:text="삭제"
-            android:textColor="@android:color/white"
-            android:textSize="12sp"
-            android:visibility="gone"
-            app:cornerRadius="8dp" />
+            app:cornerRadius="4dp" />
     </LinearLayout>
 
     <ScrollView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:layout_below="@id/topBar"
+        android:layout_below="@id/selectionBar"
         android:fillViewport="true">
         <LinearLayout
             android:id="@+id/cartItemsContainer"
@@ -102,10 +141,13 @@
             </RelativeLayout>
 
             <FrameLayout
+                android:id="@+id/layoutPhotoPreview"
                 android:layout_width="match_parent"
                 android:layout_height="120dp"
                 android:layout_marginTop="16dp"
-                android:background="#F2F4F8">
+                android:background="#F2F4F8"
+                android:clickable="true"
+                android:focusable="true">
                 <ImageView
                     android:id="@+id/ivPhotoPreview"
                     android:layout_width="match_parent"

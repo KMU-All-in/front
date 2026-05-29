@@ -54,6 +54,7 @@ class FakeCartActivity : AppCompatActivity() {
     private lateinit var tabPhoto: Button
     private lateinit var tabManual: Button
 
+    private lateinit var layoutPhotoPreview: View
     private lateinit var layoutUrlInput: LinearLayout
     private lateinit var layoutPhotoInput: LinearLayout
     private lateinit var layoutManualInput: LinearLayout
@@ -68,8 +69,11 @@ class FakeCartActivity : AppCompatActivity() {
     private lateinit var btnSubmit: Button
     private lateinit var btnSubmitEdit: Button
     private lateinit var btnAddProduct: Button
+    private lateinit var btnStartSelection: Button
     private lateinit var btnCancelSelection: Button
     private lateinit var btnDeleteSelected: Button
+    private lateinit var cbSelectAllProducts: CheckBox
+    private lateinit var selectionBar: View
 
     private lateinit var etNewReason: EditText
     private lateinit var btnSubmitReason: Button
@@ -81,6 +85,7 @@ class FakeCartActivity : AppCompatActivity() {
     private var editingProduct: FakeProduct? = null
     private var latestProducts: List<FakeProduct> = emptyList()
     private val selectedProductIds = mutableSetOf<String>()
+    private var selectionMode = false
 
     private val requestPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
         if (isGranted) scheduleExpiryCheck()
@@ -191,6 +196,7 @@ class FakeCartActivity : AppCompatActivity() {
         dimView = findViewById(R.id.dimView)
         ivPhotoPreview = findViewById(R.id.ivPhotoPreview)
         ivEditPhotoPreview = findViewById(R.id.ivEditPhotoPreview) 
+        layoutPhotoPreview = findViewById(R.id.layoutPhotoPreview)
 
         tabUrl = findViewById(R.id.tabUrl)
         tabPhoto = findViewById(R.id.tabPhoto)
@@ -212,8 +218,11 @@ class FakeCartActivity : AppCompatActivity() {
         btnSubmit = findViewById(R.id.btnSubmit)
         btnSubmitEdit = findViewById(R.id.btnSubmitEdit) 
         btnAddProduct = findViewById(R.id.btnAddProduct)
+        btnStartSelection = findViewById(R.id.btnStartSelection)
         btnCancelSelection = findViewById(R.id.btnCancelSelection)
         btnDeleteSelected = findViewById(R.id.btnDeleteSelected)
+        cbSelectAllProducts = findViewById(R.id.cbSelectAllProducts)
+        selectionBar = findViewById(R.id.selectionBar)
 
         etNewReason = findViewById(R.id.etNewReason)
         btnSubmitReason = findViewById(R.id.btnSubmitReason)
@@ -226,7 +235,9 @@ class FakeCartActivity : AppCompatActivity() {
 
     private fun setupListeners() {
         btnAddProduct.setOnClickListener { showAddProductPopup() }
+        btnStartSelection.setOnClickListener { enterSelectionMode() }
         btnCancelSelection.setOnClickListener { exitSelectionMode() }
+        cbSelectAllProducts.setOnClickListener { toggleSelectAll(cbSelectAllProducts.isChecked) }
         btnDeleteSelected.setOnClickListener { confirmDeleteSelected() }
         findViewById<ImageView>(R.id.btnCloseCard)?.setOnClickListener { hidePopups() }
         findViewById<ImageView>(R.id.btnCloseEdit)?.setOnClickListener { hidePopups() } 
@@ -236,6 +247,8 @@ class FakeCartActivity : AppCompatActivity() {
         tabPhoto.setOnClickListener { selectTab(1) }
         tabManual.setOnClickListener { selectTab(2) }
 
+        layoutPhotoPreview.setOnClickListener { pickImageLauncher.launch("image/*") }
+        ivPhotoPreview.setOnClickListener { pickImageLauncher.launch("image/*") }
         layoutPhotoInput.setOnClickListener { pickImageLauncher.launch("image/*") }
         findViewById<View>(R.id.layoutEditPhoto)?.setOnClickListener { pickImageLauncher.launch("image/*") } 
 
@@ -263,7 +276,7 @@ class FakeCartActivity : AppCompatActivity() {
         tabManual.backgroundTintList = ColorStateList.valueOf(if (index == 2) activeBg else inactiveBg)
         tabManual.setTextColor(if (index == 2) activeText else inactiveText)
 
-        layoutUrlInput.visibility = if (index == 0) View.VISIBLE else View.GONE
+        layoutUrlInput.visibility = View.VISIBLE
         layoutPhotoInput.visibility = if (index == 1) View.VISIBLE else View.GONE
         layoutManualInput.visibility = if (index == 0 || index == 2) View.VISIBLE else View.GONE
     }
@@ -315,28 +328,18 @@ class FakeCartActivity : AppCompatActivity() {
             itemView.findViewById<TextView>(R.id.tvReasonsSummary)?.text = reasonsText
 
             val cbSelect = itemView.findViewById<CheckBox>(R.id.cbSelectProduct)
-            cbSelect.visibility = if (isSelectionMode()) View.VISIBLE else View.GONE
+            cbSelect.visibility = if (selectionMode) View.VISIBLE else View.GONE
             cbSelect.setOnCheckedChangeListener(null)
             cbSelect.isChecked = isSelected
             cbSelect.setOnCheckedChangeListener { _, _ -> toggleProductSelection(product.id) }
 
-            itemView.setOnLongClickListener {
-                enterSelectionMode(product.id)
-                true
-            }
-
             itemView.findViewById<Button>(R.id.btnAddReason)?.apply {
-                visibility = if (isSelectionMode()) View.GONE else View.VISIBLE
+                visibility = View.VISIBLE
                 setOnClickListener { showAddReasonPopup(product) }
             }
 
             // [추가] 리스트 아이템 터치 시 URL 이동/복사 로직
             itemView.setOnClickListener {
-                if (isSelectionMode()) {
-                    toggleProductSelection(product.id)
-                    return@setOnClickListener
-                }
-
                 val isDDay = diffInDays <= 0
                 val reasonCount = product.reasons.size
                 val hasEnoughReasons = reasonCount >= 5
@@ -357,14 +360,13 @@ class FakeCartActivity : AppCompatActivity() {
                     if (product.url.isEmpty()) {
                         Toast.makeText(this, "연결할 주소가 저장되어 있지 않습니다.", Toast.LENGTH_SHORT).show()
                     } else {
-                        val message = "숙고가 부족합니다! (남은 기간: ${if(diffInDays > 0) diffInDays else 0}일 또는 남은 이유: ${5 - reasonCount}개)"
-                        Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+                        Toast.makeText(this, "숙고 기간이 지나지 않았습니다.", Toast.LENGTH_SHORT).show()
                     }
                 }
             }
 
             itemView.findViewById<ImageButton>(R.id.btnOptions)?.apply {
-                visibility = if (isSelectionMode()) View.GONE else View.VISIBLE
+                visibility = View.VISIBLE
                 setOnClickListener { view ->
                 val popup = PopupMenu(this@FakeCartActivity, view)
                 popup.menu.add("수정")
@@ -397,30 +399,40 @@ class FakeCartActivity : AppCompatActivity() {
         }
     }
 
-    private fun isSelectionMode(): Boolean = selectedProductIds.isNotEmpty()
-
-    private fun enterSelectionMode(productId: String) {
-        selectedProductIds.add(productId)
-        renderCartItems(latestProducts)
-    }
-
     private fun toggleProductSelection(productId: String) {
+        if (!selectionMode) return
         if (selectedProductIds.contains(productId)) selectedProductIds.remove(productId)
         else selectedProductIds.add(productId)
         renderCartItems(latestProducts)
     }
 
+    private fun enterSelectionMode() {
+        selectionMode = true
+        renderCartItems(latestProducts)
+    }
+
     private fun exitSelectionMode() {
+        selectionMode = false
         selectedProductIds.clear()
         renderCartItems(latestProducts)
     }
 
+    private fun toggleSelectAll(selectAll: Boolean) {
+        selectedProductIds.clear()
+        if (selectAll) selectedProductIds.addAll(latestProducts.map { it.id })
+        renderCartItems(latestProducts)
+    }
+
     private fun updateSelectionActions() {
-        val selectionMode = isSelectionMode()
+        selectionBar.visibility = if (selectionMode) View.VISIBLE else View.GONE
+        btnStartSelection.visibility = if (selectionMode) View.GONE else View.VISIBLE
         btnAddProduct.visibility = if (selectionMode) View.GONE else View.VISIBLE
-        btnCancelSelection.visibility = if (selectionMode) View.VISIBLE else View.GONE
-        btnDeleteSelected.visibility = if (selectionMode) View.VISIBLE else View.GONE
-        btnDeleteSelected.text = "삭제 ${selectedProductIds.size}"
+        cbSelectAllProducts.setOnCheckedChangeListener(null)
+        cbSelectAllProducts.isChecked = latestProducts.isNotEmpty() && selectedProductIds.size == latestProducts.size
+        cbSelectAllProducts.setOnClickListener { toggleSelectAll(cbSelectAllProducts.isChecked) }
+        btnDeleteSelected.isEnabled = selectedProductIds.isNotEmpty()
+        btnDeleteSelected.alpha = if (selectedProductIds.isNotEmpty()) 1f else 0.45f
+        btnDeleteSelected.text = if (selectedProductIds.isEmpty()) "선택한 상품 삭제" else "선택한 상품 삭제 ${selectedProductIds.size}"
     }
 
     private fun confirmDeleteSelected() {

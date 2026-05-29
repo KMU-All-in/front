@@ -86,7 +86,6 @@
 
         <activity 
             android:name=".FakeCartActivity"
-                <data android:mimeType="text/plain" />
             android:exported="false" />
         
     </application>

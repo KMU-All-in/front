@@ -24,7 +24,7 @@
                 android:layout_width="40dp"
                 android:layout_height="40dp"
                 android:buttonTint="#4F6FFF"
-                android:visibility="gone" />
+                android:visibility="visible" />
 
             <androidx.cardview.widget.CardView
                 android:layout_width="80dp"

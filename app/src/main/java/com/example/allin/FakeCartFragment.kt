@@ -43,6 +43,7 @@ class FakeCartFragment : Fragment() {
     private lateinit var tabUrl: Button
     private lateinit var tabPhoto: Button
     private lateinit var tabManual: Button
+    private lateinit var layoutPhotoPreview: View
     private lateinit var layoutUrlInput: LinearLayout
     private lateinit var layoutPhotoInput: LinearLayout
     private lateinit var layoutManualInput: LinearLayout
@@ -56,8 +57,11 @@ class FakeCartFragment : Fragment() {
     private lateinit var btnSubmit: Button
     private lateinit var btnSubmitEdit: Button
     private lateinit var btnAddProduct: Button
+    private lateinit var btnStartSelection: Button
     private lateinit var btnCancelSelection: Button
     private lateinit var btnDeleteSelected: Button
+    private lateinit var cbSelectAllProducts: CheckBox
+    private lateinit var selectionBar: View
     private lateinit var etNewReason: EditText
     private lateinit var btnSubmitReason: Button
 
@@ -68,13 +72,16 @@ class FakeCartFragment : Fragment() {
     private var editingProduct: FakeProduct? = null
     private var latestProducts: List<FakeProduct> = emptyList()
     private val selectedProductIds = mutableSetOf<String>()
+    private var selectionMode = false
 
     private val pickImageLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         uri?.let {
             selectedImageUri = it
             if (cardEditProduct.visibility == View.VISIBLE) {
+                clearImageTint(ivEditPhotoPreview)
                 ivEditPhotoPreview.setImageURI(it)
             } else {
+                clearImageTint(ivPhotoPreview)
                 ivPhotoPreview.setImageURI(it)
             }
             processOcr(it)
@@ -127,6 +134,7 @@ class FakeCartFragment : Fragment() {
         dimView = view.findViewById(R.id.dimView)
         ivPhotoPreview = view.findViewById(R.id.ivPhotoPreview)
         ivEditPhotoPreview = view.findViewById(R.id.ivEditPhotoPreview)
+        layoutPhotoPreview = view.findViewById(R.id.layoutPhotoPreview)
 
         tabUrl = view.findViewById(R.id.tabUrl); tabPhoto = view.findViewById(R.id.tabPhoto); tabManual = view.findViewById(R.id.tabManual)
         layoutUrlInput = view.findViewById(R.id.layoutUrlInput); layoutPhotoInput = view.findViewById(R.id.layoutPhotoInput); layoutManualInput = view.findViewById(R.id.layoutManualInput)
@@ -137,8 +145,11 @@ class FakeCartFragment : Fragment() {
         spExpiry = view.findViewById(R.id.spExpiry)
         btnSubmit = view.findViewById(R.id.btnSubmit); btnSubmitEdit = view.findViewById(R.id.btnSubmitEdit)
         btnAddProduct = view.findViewById(R.id.btnAddProduct)
+        btnStartSelection = view.findViewById(R.id.btnStartSelection)
         btnCancelSelection = view.findViewById(R.id.btnCancelSelection)
         btnDeleteSelected = view.findViewById(R.id.btnDeleteSelected)
+        cbSelectAllProducts = view.findViewById(R.id.cbSelectAllProducts)
+        selectionBar = view.findViewById(R.id.selectionBar)
         etNewReason = view.findViewById(R.id.etNewReason); btnSubmitReason = view.findViewById(R.id.btnSubmitReason)
 
         val expiryOptions = arrayOf("1일", "3일", "7일(권장)", "14일", "30일")
@@ -148,7 +159,9 @@ class FakeCartFragment : Fragment() {
 
     private fun setupListeners(view: View) {
         btnAddProduct.setOnClickListener { showAddProductPopup() }
+        btnStartSelection.setOnClickListener { enterSelectionMode() }
         btnCancelSelection.setOnClickListener { exitSelectionMode() }
+        cbSelectAllProducts.setOnClickListener { toggleSelectAll(cbSelectAllProducts.isChecked) }
         btnDeleteSelected.setOnClickListener { confirmDeleteSelected() }
         view.findViewById<ImageView>(R.id.btnCloseCard)?.setOnClickListener { hidePopups() }
         view.findViewById<ImageView>(R.id.btnCloseEdit)?.setOnClickListener { hidePopups() }
@@ -156,6 +169,8 @@ class FakeCartFragment : Fragment() {
 
         tabUrl.setOnClickListener { selectTab(0) }; tabPhoto.setOnClickListener { selectTab(1) }; tabManual.setOnClickListener { selectTab(2) }
 
+        layoutPhotoPreview.setOnClickListener { pickImageLauncher.launch("image/*") }
+        ivPhotoPreview.setOnClickListener { pickImageLauncher.launch("image/*") }
         layoutPhotoInput.setOnClickListener { pickImageLauncher.launch("image/*") }
         view.findViewById<View>(R.id.layoutEditPhoto)?.setOnClickListener { pickImageLauncher.launch("image/*") }
 
@@ -173,7 +188,7 @@ class FakeCartFragment : Fragment() {
         tabPhoto.backgroundTintList = ColorStateList.valueOf(if (index == 1) activeBg else inactiveBg); tabPhoto.setTextColor(if (index == 1) activeTextColor else inactiveTextColor)
         tabManual.backgroundTintList = ColorStateList.valueOf(if (index == 2) activeBg else inactiveBg); tabManual.setTextColor(if (index == 2) activeTextColor else inactiveTextColor)
 
-        layoutUrlInput.visibility = if (index == 0) View.VISIBLE else View.GONE
+        layoutUrlInput.visibility = View.VISIBLE
         layoutPhotoInput.visibility = if (index == 1) View.VISIBLE else View.GONE
         layoutManualInput.visibility = if (index == 0 || index == 2) View.VISIBLE else View.GONE
     }
@@ -205,26 +220,29 @@ class FakeCartFragment : Fragment() {
             val ivProduct = itemView.findViewById<ImageView>(R.id.ivProduct)
             if (product.imageUrl.isNotEmpty()) Glide.with(this).load(product.imageUrl).placeholder(android.R.drawable.ic_menu_gallery).into(ivProduct)
 
+            val reasonsText = if (product.reasons.isEmpty()) "아직 작성된 이유가 없습니다."
+            else product.reasons.joinToString("\n") { "• $it" }
+            itemView.findViewById<TextView>(R.id.tvReasonsSummary)?.text = reasonsText
+
             val cbSelect = itemView.findViewById<CheckBox>(R.id.cbSelectProduct)
-            cbSelect.visibility = if (isSelectionMode()) View.VISIBLE else View.GONE
+            cbSelect.visibility = if (selectionMode) View.VISIBLE else View.GONE
             cbSelect.setOnCheckedChangeListener(null)
             cbSelect.isChecked = isSelected
             cbSelect.setOnCheckedChangeListener { _, _ -> toggleProductSelection(product.id) }
 
-            itemView.setOnLongClickListener {
-                enterSelectionMode(product.id)
-                true
-            }
             itemView.setOnClickListener {
-                if (isSelectionMode()) toggleProductSelection(product.id)
+                openProductIfAllowed(product, diffInDays)
+            }
+            itemView.findViewById<TextView>(R.id.tvProductName)?.setOnClickListener {
+                openProductIfAllowed(product, diffInDays)
             }
 
             itemView.findViewById<Button>(R.id.btnAddReason)?.apply {
-                visibility = if (isSelectionMode()) View.GONE else View.VISIBLE
+                visibility = View.VISIBLE
                 setOnClickListener { showAddReasonPopup(product) }
             }
             itemView.findViewById<ImageButton>(R.id.btnOptions)?.apply {
-                visibility = if (isSelectionMode()) View.GONE else View.VISIBLE
+                visibility = View.VISIBLE
                 setOnClickListener { v ->
                 val popup = PopupMenu(requireContext(), v)
                 popup.menu.add("수정"); popup.menu.add("삭제")
@@ -242,30 +260,64 @@ class FakeCartFragment : Fragment() {
         }
     }
 
-    private fun isSelectionMode(): Boolean = selectedProductIds.isNotEmpty()
+    private fun openProductIfAllowed(product: FakeProduct, diffInDays: Long) {
+        val isDDay = diffInDays <= 0
+        val reasonCount = product.reasons.size
+        val hasEnoughReasons = reasonCount >= 5
 
-    private fun enterSelectionMode(productId: String) {
-        selectedProductIds.add(productId)
-        renderCartItems(latestProducts)
+        if ((isDDay || hasEnoughReasons) && product.url.isNotEmpty()) {
+            try {
+                val url = if (!product.url.startsWith("http")) "https://${product.url}" else product.url
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+            } catch (e: Exception) {
+                val clipboard = requireContext().getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
+                val clip = android.content.ClipData.newPlainText("Product URL", product.url)
+                clipboard.setPrimaryClip(clip)
+                Toast.makeText(requireContext(), "브라우저 연결이 어려워 주소를 복사했습니다.", Toast.LENGTH_SHORT).show()
+            }
+        } else {
+            if (product.url.isEmpty()) {
+                Toast.makeText(requireContext(), "연결할 주소가 저장되어 있지 않습니다.", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(requireContext(), "숙고 기간이 지나지 않았습니다.", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     private fun toggleProductSelection(productId: String) {
+        if (!selectionMode) return
         if (selectedProductIds.contains(productId)) selectedProductIds.remove(productId)
         else selectedProductIds.add(productId)
         renderCartItems(latestProducts)
     }
 
+    private fun enterSelectionMode() {
+        selectionMode = true
+        renderCartItems(latestProducts)
+    }
+
     private fun exitSelectionMode() {
+        selectionMode = false
         selectedProductIds.clear()
         renderCartItems(latestProducts)
     }
 
+    private fun toggleSelectAll(selectAll: Boolean) {
+        selectedProductIds.clear()
+        if (selectAll) selectedProductIds.addAll(latestProducts.map { it.id })
+        renderCartItems(latestProducts)
+    }
+
     private fun updateSelectionActions() {
-        val selectionMode = isSelectionMode()
+        selectionBar.visibility = if (selectionMode) View.VISIBLE else View.GONE
+        btnStartSelection.visibility = if (selectionMode) View.GONE else View.VISIBLE
         btnAddProduct.visibility = if (selectionMode) View.GONE else View.VISIBLE
-        btnCancelSelection.visibility = if (selectionMode) View.VISIBLE else View.GONE
-        btnDeleteSelected.visibility = if (selectionMode) View.VISIBLE else View.GONE
-        btnDeleteSelected.text = "삭제 ${selectedProductIds.size}"
+        cbSelectAllProducts.setOnCheckedChangeListener(null)
+        cbSelectAllProducts.isChecked = latestProducts.isNotEmpty() && selectedProductIds.size == latestProducts.size
+        cbSelectAllProducts.setOnClickListener { toggleSelectAll(cbSelectAllProducts.isChecked) }
+        btnDeleteSelected.isEnabled = selectedProductIds.isNotEmpty()
+        btnDeleteSelected.alpha = if (selectedProductIds.isNotEmpty()) 1f else 0.45f
+        btnDeleteSelected.text = if (selectedProductIds.isEmpty()) "선택한 상품 삭제" else "선택한 상품 삭제 ${selectedProductIds.size}"
     }
 
     private fun confirmDeleteSelected() {
