@@ -199,27 +199,40 @@ class BudgetFragment : Fragment() {
     }
 
     private fun updateTotalSpent(uid: String) {
-        db.collection("users").document(uid).collection("transactions").get().addOnSuccessListener { snapshots ->
-            val total = snapshots.documents.sumOf { it.getLong("amount") ?: 0L }
+        db.collection("users").document(uid).collection("transactions")
+            .get()
+            .addOnSuccessListener { snapshots ->
+                val total = snapshots.documents.sumOf { it.getLong("amount") ?: 0L }
 
-            db.collection("users").document(uid).collection("reports")
-                .orderBy("start_date", Query.Direction.DESCENDING)
-                .limit(1)
-                .get()
-                .addOnSuccessListener { reports ->
-                    // 🌟 [안전빵 추가] 주간 계획 리포트 문서가 진짜로 존재할 때만 업데이트를 실행합니다!
-                    if (!reports.isEmpty) {
-                        reports.documents[0].reference.update("total_spent", total)
-                        Log.d("BudgetFragment", "총 지출액 업데이트 완료: ${total}원")
-                    } else {
-                        // 계획서가 없다면 튕기지 않고 로그만 찍고 안전하게 넘어갑니다.
-                        Log.d("BudgetFragment", "서버에 주간 계획서가 없어 지출 합산 업데이트를 건너뜁니다.")
+                db.collection("users").document(uid).collection("reports")
+                    .orderBy("start_date", Query.Direction.DESCENDING)
+                    .limit(1)
+                    .get()
+                    .addOnSuccessListener { reports ->
+                        if (!reports.isEmpty) {
+                            val report = reports.documents[0]
+
+                            val budget = report.getLong("budget_usage") ?: 0L
+                            val oldSpent = report.getLong("total_spent") ?: 0L
+
+                            report.reference.update("total_spent", total)
+
+                            BudgetAlertNotifier.notifyIfThresholdCrossed(
+                                requireContext(),
+                                budget,
+                                oldSpent,
+                                total
+                            )
+
+                            Log.d("BudgetFragment", "총 지출액 업데이트 완료: ${total}원")
+                        } else {
+                            Log.d("BudgetFragment", "서버에 주간 계획서가 없어 지출 합산 업데이트를 건너뜁니다.")
+                        }
                     }
-                }
-                .addOnFailureListener {
-                    Log.e("BudgetFragment", "리포트 조회 실패", it)
-                }
-        }
+                    .addOnFailureListener {
+                        Log.e("BudgetFragment", "리포트 조회 실패", it)
+                    }
+            }
     }
 
     private fun deletePlan() {

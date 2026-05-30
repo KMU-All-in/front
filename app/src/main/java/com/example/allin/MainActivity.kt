@@ -116,10 +116,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun scheduleFakeCartExpiryCheck() {
-        val workRequest = PeriodicWorkRequestBuilder<FakeCartWorker>(1, TimeUnit.HOURS)
-            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
-            .build()
-        WorkManager.getInstance(this).enqueueUniquePeriodicWork("FakeCartExpiryWork", ExistingPeriodicWorkPolicy.UPDATE, workRequest)
+        NotificationWorkScheduler.syncAll(this)
     }
 
     private fun checkFakeCartExpirations() {
@@ -201,9 +198,33 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun replaceFragment(fragment: Fragment) {
-        supportFragmentManager.beginTransaction()
-            .setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out)
-            .replace(R.id.fragment_container, fragment)
-            .commit()
+        val transaction = supportFragmentManager.beginTransaction()
+        val currentFragment = supportFragmentManager.findFragmentById(R.id.fragment_container)
+
+        when {
+            currentFragment is HomeFragment && fragment is FakeCartFragment ->
+                transaction.setCustomAnimations(R.anim.slide_in_right, R.anim.slide_out_left)
+
+            currentFragment is FakeCartFragment && fragment is HomeFragment ->
+                transaction.setCustomAnimations(R.anim.slide_in_left, R.anim.slide_out_right)
+
+            currentFragment is HomeFragment && fragment is BudgetFragment ->
+                transaction.setCustomAnimations(R.anim.slide_in_left, R.anim.slide_out_right)
+
+            currentFragment is BudgetFragment && fragment is HomeFragment ->
+                transaction.setCustomAnimations(R.anim.slide_in_right, R.anim.slide_out_left)
+
+            currentFragment is BudgetFragment && fragment is FakeCartFragment ->
+                transaction.setCustomAnimations(R.anim.slide_in_right, R.anim.slide_out_left)
+
+            currentFragment is FakeCartFragment && fragment is BudgetFragment ->
+                transaction.setCustomAnimations(R.anim.slide_in_left, R.anim.slide_out_right)
+
+            else ->
+                transaction.setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out)
+        }
+
+        transaction.replace(R.id.fragment_container, fragment)
+        transaction.commit()
     }
 }

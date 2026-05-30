@@ -13,6 +13,7 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import java.util.concurrent.TimeUnit
+import com.example.allin.NotificationSettings
 
 class ExpiryCheckerWorker(
     context: Context,
@@ -20,6 +21,11 @@ class ExpiryCheckerWorker(
 ) : CoroutineWorker(context, workerParams) {
 
     override suspend fun doWork(): Result {
+        if (!NotificationSettings.isCartAlertEnabled(applicationContext)) {
+            return Result.success()
+        }
+
+
         val auth = FirebaseAuth.getInstance()
         val firestore = FirebaseFirestore.getInstance()
         val currentUser = auth.currentUser ?: return Result.failure()

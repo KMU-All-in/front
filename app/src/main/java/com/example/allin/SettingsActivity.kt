@@ -37,7 +37,7 @@ class SettingsActivity : AppCompatActivity() {
             startActivity(intent)
             finish()
         }
-        
+
         val user = auth.currentUser
         findViewById<TextView>(R.id.tvUserName).text = user?.displayName ?: "사용자"
         findViewById<TextView>(R.id.tvUserEmail).text = user?.email ?: "이메일 정보 없음"
@@ -47,26 +47,36 @@ class SettingsActivity : AppCompatActivity() {
     }
 
     private fun setupNotificationSwitches() {
-        val prefs = getSharedPreferences("AllInPrefs", Context.MODE_PRIVATE)
-        
+        val prefs = getSharedPreferences(NotificationSettings.PREFS_NAME, Context.MODE_PRIVATE)
+
         val swBudget = findViewById<SwitchCompat>(R.id.swBudgetAlert)
         val swPlan = findViewById<SwitchCompat>(R.id.swPlanAlert)
         val swCart = findViewById<SwitchCompat>(R.id.swCartAlert)
 
-        // 초기값 설정 (기본값 true)
-        swBudget.isChecked = prefs.getBoolean("alert_budget", true)
-        swPlan.isChecked = prefs.getBoolean("alert_plan", true)
-        swCart.isChecked = prefs.getBoolean("alert_cart", true)
+        swBudget.isChecked = prefs.getBoolean(NotificationSettings.KEY_BUDGET_ALERT, true)
+        swPlan.isChecked = prefs.getBoolean(NotificationSettings.KEY_PLAN_ALERT, true)
+        swCart.isChecked = prefs.getBoolean(NotificationSettings.KEY_CART_ALERT, true)
 
-        // 변경 리스너 설정
         swBudget.setOnCheckedChangeListener { _, isChecked ->
-            prefs.edit().putBoolean("alert_budget", isChecked).apply()
+            prefs.edit()
+                .putBoolean(NotificationSettings.KEY_BUDGET_ALERT, isChecked)
+                .apply()
         }
+
         swPlan.setOnCheckedChangeListener { _, isChecked ->
-            prefs.edit().putBoolean("alert_plan", isChecked).apply()
+            prefs.edit()
+                .putBoolean(NotificationSettings.KEY_PLAN_ALERT, isChecked)
+                .apply()
+
+            NotificationWorkScheduler.syncWeeklyPlanReminder(this)
         }
+
         swCart.setOnCheckedChangeListener { _, isChecked ->
-            prefs.edit().putBoolean("alert_cart", isChecked).apply()
+            prefs.edit()
+                .putBoolean(NotificationSettings.KEY_CART_ALERT, isChecked)
+                .apply()
+
+            NotificationWorkScheduler.syncFakeCartExpiry(this)
         }
     }
 
@@ -80,4 +90,6 @@ class SettingsActivity : AppCompatActivity() {
         super.onWindowFocusChanged(hasFocus)
         if (hasFocus) hideSystemBars()
     }
+
+
 }

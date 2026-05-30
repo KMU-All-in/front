@@ -12,6 +12,7 @@ import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.tasks.await
+import com.example.allin.NotificationSettings
 
 class PaymentRepository(private val paymentDao: PaymentDao) {
 
@@ -166,6 +167,7 @@ class PaymentRepository(private val paymentDao: PaymentDao) {
 
         val message = when {
             oldPercent < 100 && newPercent >= 100 -> "예산을 모두 사용함. 이제부터 길냥이정식도 못먹음 짬타이거 ㄱㄱ"
+            oldPercent < 90 && newPercent >= 90 -> "90%를 사용했어요. 길냥이정식이 얼마 안남았어요."
             oldPercent < 80 && newPercent >= 80 -> "이제 길냥이정식 먹을시간이에요."
             oldPercent < 50 && newPercent >= 50 -> "우와 50퍼나 사용했어요."
             else -> null
@@ -177,6 +179,8 @@ class PaymentRepository(private val paymentDao: PaymentDao) {
     }
 
     private fun sendBudgetNotification(context: Context, message: String) {
+        if (!NotificationSettings.isBudgetAlertEnabled(context)) return
+
         val channelId = "BudgetThresholdChannel"
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 

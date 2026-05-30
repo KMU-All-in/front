@@ -18,10 +18,15 @@ import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import java.util.*
 import java.util.concurrent.TimeUnit
+import com.example.allin.NotificationSettings
 
 class FakeCartWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
+        if (!NotificationSettings.isCartAlertEnabled(applicationContext)) {
+            return Result.success()
+        }
+
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return Result.success()
         val db = FirebaseFirestore.getInstance()
         val now = System.currentTimeMillis()

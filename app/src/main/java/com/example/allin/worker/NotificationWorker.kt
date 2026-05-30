@@ -15,29 +15,29 @@ import com.example.allin.R
 import com.example.allin.data.AppDatabase
 import kotlinx.coroutines.flow.first
 import java.util.*
+import com.example.allin.NotificationSettings
 
 class NotificationWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
         val prefs = applicationContext.getSharedPreferences("AppLockPrefs", Context.MODE_PRIVATE)
+
         val hasPlan = prefs.getBoolean("has_weekly_plan", false)
-        
+
         val calendar = Calendar.getInstance()
         val hour = calendar.get(Calendar.HOUR_OF_DAY)
 
         // 3-2. 주간 계획 작성 독촉 (12시, 18시)
-        if (!hasPlan && (hour == 12 || hour == 18)) {
-            // 사용자가 무시했을 경우를 대비해 캐릭터 상태(짜증) 플래그 설정 가능
+        if (NotificationSettings.isPlanAlertEnabled(applicationContext) && !hasPlan && (hour == 12 || hour == 18)) {
             val ignoreCount = prefs.getInt("plan_ignore_count", 0)
-            val message = if (ignoreCount > 0) "아직도 안 했어? 빨리 주간 계획 짜라고! (캐릭터가 짜증을 냅니다)" 
-                         else "이번 주 주간 계획을 아직 작성하지 않았습니다."
-            
+            val message = if (ignoreCount > 0) "아직도 안 했어? 빨리 주간 계획 짜라고!"
+            else "이번 주 주간 계획을 아직 작성하지 않았습니다."
+
             sendNotification("주간 계획 알림", message, BudgetSetupActivity::class.java, 3001)
             prefs.edit().putInt("plan_ignore_count", ignoreCount + 1).apply()
         }
 
         // 3-4. 장바구니 소멸 알림 (소멸 1일 전 상품 체크)
-        checkFakeCartExpiry()
 
         return Result.success()
     }
@@ -64,12 +64,15 @@ class NotificationWorker(context: Context, params: WorkerParameters) : Coroutine
     }
 
     private fun sendNotification(title: String, message: String, targetActivity: Class<*>, id: Int) {
-        val channelId = "ScheduledAlarmChannel"
+        val channelId = "ScheduledAlarmChannelHigh"
         val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "정기 알림", NotificationManager.IMPORTANCE_DEFAULT)
-            manager.createNotificationChannel(channel)
+            val channel = NotificationChannel(
+                channelId,
+                "정기 알림",
+                NotificationManager.IMPORTANCE_HIGH
+            )
         }
 
         val intent = Intent(applicationContext, targetActivity)
@@ -79,7 +82,8 @@ class NotificationWorker(context: Context, params: WorkerParameters) : Coroutine
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentTitle(title)
             .setContentText(message)
-            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
             .build()

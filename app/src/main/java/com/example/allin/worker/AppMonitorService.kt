@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import java.util.*
 import com.example.allin.MainActivity
+import com.example.allin.NotificationSettings
 
 class AppMonitorService : Service() {
 
@@ -79,7 +80,7 @@ class AppMonitorService : Service() {
             .get()
             .addOnSuccessListener { snapshots ->
 
-                if (snapshots.isEmpty || (snapshots.documents[0].getLong("budget_usage") ?: 0L) <= 0L) {
+                if (NotificationSettings.isPlanAlertEnabled(this@AppMonitorService)) {
 
                     sendNotification("계획 미작성", "이번 주 주간 계획을 먼저 작성해 주세요!")
 
@@ -104,7 +105,7 @@ class AppMonitorService : Service() {
                 // 예산 사용량 경고 체크
                 if (budget > 0L) {
                     val percent = ((thisWeekTotal.toDouble() / budget.toDouble()) * 100).toInt()
-                    if (percent >= 50) {
+                    if (NotificationSettings.isBudgetAlertEnabled(this@AppMonitorService) && percent >= 50) {
                         sendNotification("예산 경고", "이번 주 예산의 ${percent}%를 사용했습니다! 신중하게 쇼핑하세요.")
                     }
                 }
