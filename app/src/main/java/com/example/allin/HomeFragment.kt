@@ -38,7 +38,6 @@ class HomeFragment : Fragment() {
         inflater: LayoutInflater, container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View? {
-        // 기존 activity_home.xml 레이아웃을 사용합니다.
         val view = inflater.inflate(R.layout.activity_home, container, false)
 
         initViews(view)
@@ -76,10 +75,13 @@ class HomeFragment : Fragment() {
                 }
 
                 val document = snapshots.documents[0]
-                val budgetLimit = document.getLong("budget_usage")?.toInt() ?: 0
-                val totalSpent = document.getLong("total_spent")?.toInt() ?: 0
+                val budgetLimit = document.getLong("budget_usage")?.toLong() ?: 0L
+                val totalSpent = document.getLong("total_spent")?.toLong() ?: 0L
 
-                updateUI(budgetLimit, totalSpent)
+                // [핵심] 홈 화면에서도 데이터가 변경되면 즉시 예산 초과 및 앱 강제 잠금 체크
+                BudgetAlertNotifier.notifyIfThresholdCrossed(requireContext(), budgetLimit, totalSpent, totalSpent)
+
+                updateUI(budgetLimit.toInt(), totalSpent.toInt())
             }
     }
 
@@ -170,7 +172,5 @@ class HomeFragment : Fragment() {
         view.findViewById<CardView>(R.id.menuAppLock).setOnClickListener {
             startActivity(Intent(requireContext(), AppLockActivity::class.java))
         }
-
-        // ❌ 네비게이션(하단바) 클릭 리스너는 이제 MainActivity에서 관리하므로 여기서 삭제합니다!
     }
 }

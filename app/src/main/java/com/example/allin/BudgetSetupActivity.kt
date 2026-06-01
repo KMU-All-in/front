@@ -151,7 +151,7 @@ class BudgetSetupActivity : AppCompatActivity() {
 
     private fun saveData() {
         val currentUser = auth.currentUser ?: return
-        val amountStr = etInputAmount.text.toString()
+        val amountStr = etInputAmount.text.toString().trim()
         if (amountStr.isEmpty()) return
         val amount = amountStr.toLong()
 
@@ -163,14 +163,15 @@ class BudgetSetupActivity : AppCompatActivity() {
                 .get()
                 .addOnSuccessListener { snapshots ->
                     if (!snapshots.isEmpty) {
-                        // 1. 기존 문서가 있어서 업데이트할 때
-                        snapshots.documents[0].reference.update("budget_usage", amount)
+                        val doc = snapshots.documents[0]
+                        val currentSpent = doc.getLong("total_spent") ?: 0L
+                        doc.reference.update("budget_usage", amount)
                             .addOnSuccessListener {
-                                // 🌟 [추가] 업데이트 성공 시에도 로컬 주머니 채우기!
                                 savePlanToLocal(amount)
+                                // [추가] 예산을 수정하자마자 즉시 초과 여부를 체크하여 잠금 실행
+                                BudgetAlertNotifier.notifyIfThresholdCrossed(this@BudgetSetupActivity, amount, currentSpent, currentSpent)
                             }
                     } else {
-                        // 2. 문서가 없어서 새로 추가할 때
                         val newReport = hashMapOf(
                             "budget_usage" to amount,
                             "total_spent" to 0L,
@@ -180,10 +181,27 @@ class BudgetSetupActivity : AppCompatActivity() {
                         )
                         db.collection("users").document(currentUser.uid).collection("reports").add(newReport)
                             .addOnSuccessListener {
-                                // 🌟 [확인] 새 문서 추가 성공 시에도 로컬 주머니 채우기!
                                 savePlanToLocal(amount)
+                                // [추가] 새 예산 설정 시에도 즉시 체크
+                                BudgetAlertNotifier.notifyIfThresholdCrossed(this@BudgetSetupActivity, amount, 0L, 0L)
                             }
                     }
+                }
+        } else {
+            val storeName = etInputName.text.toString().ifEmpty { "지출" }
+            val category = spCategory.selectedItem?.toString() ?: "기타"
+
+            val transaction = hashMapOf(
+                "amount" to amount,
+                "category" to category,
+                "store_name" to storeName,
+                "transaction_date" to Timestamp.now()
+            )
+
+            db.collection("users").document(currentUser.uid).collection("transactions")
+                .add(transaction)
+                .addOnSuccessListener {
+                    updateTotalSpent(currentUser.uid)
                 }
         }
         hidePopup()
@@ -196,7 +214,6 @@ class BudgetSetupActivity : AppCompatActivity() {
             putInt("weekly_budget", amount.toInt())
             commit()
         }
-        Log.d("BudgetSetup", "로컬 SharedPreferences 주간 계획 동기화 완료: $amount 원")
     }
 
     private fun updateTotalSpent(uid: String) {
@@ -208,7 +225,18 @@ class BudgetSetupActivity : AppCompatActivity() {
                 .get()
                 .addOnSuccessListener { reports ->
                     if (!reports.isEmpty) {
-                        reports.documents[0].reference.update("total_spent", total)
+                        val report = reports.documents[0]
+                        val budget = report.getLong("budget_usage") ?: 0L
+                        val oldSpent = report.getLong("total_spent") ?: 0L
+
+                        report.reference.update("total_spent", total)
+
+                        BudgetAlertNotifier.notifyIfThresholdCrossed(
+                            this,
+                            budget,
+                            oldSpent,
+                            total
+                        )
                     }
                 }
         }
@@ -223,13 +251,14 @@ class BudgetSetupActivity : AppCompatActivity() {
             for (doc in it) doc.reference.delete()
         }
 
-        // 🌟 [추가] 계획을 삭제했으므로 로컬 저장소도 미작성(false) 상태로 초기화합니다.
         val sharedPref = getSharedPreferences("AppLockPrefs", Context.MODE_PRIVATE)
         sharedPref.edit().apply {
             putBoolean("has_weekly_plan", false)
+            putBoolean("is_budget_exceeded", false) // 초과 상태 해제
             putInt("weekly_budget", 0)
-            apply()
+            commit()
         }
+        Toast.makeText(this, "계획이 삭제되었습니다.", Toast.LENGTH_SHORT).show()
     }
 
     private fun observeData() {
@@ -245,7 +274,9 @@ class BudgetSetupActivity : AppCompatActivity() {
                     val budget = doc.getLong("budget_usage") ?: 0L
                     val spent = doc.getLong("total_spent") ?: 0L
 
-                    // 🌟 [수정] 서버에서 가져온 예산이 있으면 로컬 SharedPreferences도 업데이트합니다.
+                    // [추가] 데이터 변경 시마다 예산 초과 여부 체크하여 잠금 강제 동기화
+                    BudgetAlertNotifier.notifyIfThresholdCrossed(this, budget, spent, spent)
+
                     if (budget > 0) {
                         savePlanToLocal(budget)
                     }
@@ -299,7 +330,7 @@ class BudgetSetupActivity : AppCompatActivity() {
         categories.forEach { category ->
             val catUsed = transactions.filter { it.getString("category") == category }
                                      .sumOf { it.getLong("amount") ?: 0L }
-            val catGoal = 50000 // 예시 목표액
+            val catGoal = 50000 
 
             val itemView = LayoutInflater.from(this).inflate(R.layout.item_budget_category, llCategoryList, false)
             itemView.findViewById<TextView>(R.id.tvCatName).text = category
@@ -333,15 +364,10 @@ class BudgetSetupActivity : AppCompatActivity() {
     private fun setupBackPress() {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
-                // 홈 화면으로 이동
                 val intent = Intent(this@BudgetSetupActivity, HomeActivity::class.java)
                 intent.addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
                 startActivity(intent)
-
-                // 왼쪽으로 이동하는 애니메이션 적용
                 overridePendingTransition(R.anim.slide_in_right, R.anim.slide_out_left)
-
-                // 현재 액티비티 종료
                 finish()
             }
         })

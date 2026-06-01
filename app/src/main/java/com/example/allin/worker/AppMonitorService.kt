@@ -5,6 +5,7 @@ import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.Handler
@@ -18,7 +19,7 @@ import com.example.allin.R
 import com.example.allin.data.AppDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import java.util.*
 import com.example.allin.MainActivity
@@ -31,10 +32,20 @@ class AppMonitorService : Service() {
     private val lockedApps = mutableSetOf<String>()
     private var lastApp: String? = null
     private val serviceScope = CoroutineScope(Dispatchers.IO)
+    private lateinit var sharedPref: SharedPreferences
 
     companion object {
         var unlockedAppPackage: String? = null
         var lastLockTime: Long = 0L
+        const val TAG = "AppMonitorService"
+    }
+
+    // SharedPreference 변경 리스너 (예산 초과 플래그 감시)
+    private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+        if (key == "is_budget_exceeded") {
+            Log.d(TAG, "예산 초과 플래그 변경 감지 -> 차단 목록 갱신")
+            refreshLockedApps()
+        }
     }
 
     private val monitorRunnable = object : Runnable {
@@ -46,12 +57,9 @@ class AppMonitorService : Service() {
 
             if (currentApp != null && lockedApps.contains(currentApp)) {
                 if (currentApp != unlockedAppPackage && (currentTime - lastLockTime > 5000)) {
-                    Log.d("AppMonitorService", "쇼핑 앱 확실하게 차단 실행 (중복 원천 차단): $currentApp")
-
+                    Log.d(TAG, "잠금 앱 차단 실행: $currentApp")
                     lastLockTime = currentTime
                     unlockedAppPackage = null
-
-                    checkBudgetAndPlan()
 
                     val lockIntent = Intent(applicationContext, LockActivity::class.java).apply {
                         addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
@@ -59,90 +67,17 @@ class AppMonitorService : Service() {
                     }
                     startActivity(lockIntent)
                 }
-            } else {
-                if (currentApp != null && !lockedApps.contains(currentApp)) {
-                    unlockedAppPackage = null
-                }
             }
             lastApp = currentApp
             handler.postDelayed(this, 1000)
         }
     }
 
-    // 예산 및 계획 체크 로직
-    private fun checkBudgetAndPlan() {
-        val currentUser = com.google.firebase.auth.FirebaseAuth.getInstance().currentUser ?: return
-        val db = com.google.firebase.firestore.FirebaseFirestore.getInstance()
-
-        db.collection("users").document(currentUser.uid).collection("reports")
-            .orderBy("start_date", com.google.firebase.firestore.Query.Direction.DESCENDING)
-            .limit(1)
-            .get()
-            .addOnSuccessListener { snapshots ->
-
-                if (NotificationSettings.isPlanAlertEnabled(this@AppMonitorService)) {
-
-                    sendNotification("계획 미작성", "이번 주 주간 계획을 먼저 작성해 주세요!")
-
-                    // 강제로 예산 설정 페이지로 보내는 어쩌구저쩌구 거시기 그거입니다. 강제로 보내지는게 기분 드릅다 싶으면 주석처리해도 됩니다.
-                    val intent = Intent(this@AppMonitorService, MainActivity::class.java).apply {
-                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-                        // 만약 MainActivity가 켜질 때 바로 예산 탭을 보여주고 싶다면 아래처럼 플래그를 넘길 수도 있습니다.
-                        putExtra("GO_TO_BUDGET", true)
-                    }
-                    startActivity(intent)
-
-                    Log.d("AppMonitorService", "계획 미작성 확인되어 메인 화면으로 강제 이동 완료!")
-                    // 여기까지 주석처리하면 됩니다 밑에 리턴코드 빼고
-
-                    return@addOnSuccessListener
-                }
-
-                val doc = snapshots.documents[0]
-                val budget = doc.getLong("budget_usage") ?: 0L
-                val thisWeekTotal = doc.getLong("total_spent") ?: 0L
-
-                // 예산 사용량 경고 체크
-                if (budget > 0L) {
-                    val percent = ((thisWeekTotal.toDouble() / budget.toDouble()) * 100).toInt()
-                    if (NotificationSettings.isBudgetAlertEnabled(this@AppMonitorService) && percent >= 50) {
-                        sendNotification("예산 경고", "이번 주 예산의 ${percent}%를 사용했습니다! 신중하게 쇼핑하세요.")
-                    }
-                }
-
-                Log.d("AppMonitorService", "주간 계획이 확인되어 정상 통과합니다. 예산: $budget")
-            }
-    }
-
-    private fun sendNotification(title: String, message: String) {
-        val channelId = "BudgetWarningChannel"
-        val manager = getSystemService(NotificationManager::class.java)
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "예산 경고", NotificationManager.IMPORTANCE_HIGH)
-            manager.createNotificationChannel(channel)
-        }
-
-        val intent = Intent(this@AppMonitorService, MainActivity::class.java).apply {
-            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-            putExtra("TARGET_FRAGMENT", "BUDGET")
-        }
-        val pendingIntent = PendingIntent.getActivity(this, 0, intent, PendingIntent.FLAG_IMMUTABLE)
-
-        val notification = NotificationCompat.Builder(this, channelId)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle(title)
-            .setContentText(message)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(pendingIntent)
-            .setAutoCancel(true)
-            .build()
-
-        manager.notify(System.currentTimeMillis().toInt(), notification)
-    }
-
     override fun onCreate() {
         super.onCreate()
+        sharedPref = getSharedPreferences("AppLockPrefs", Context.MODE_PRIVATE)
+        sharedPref.registerOnSharedPreferenceChangeListener(prefListener)
+        
         startForegroundService()
         observeRoomDatabase()
     }
@@ -150,9 +85,27 @@ class AppMonitorService : Service() {
     private fun observeRoomDatabase() {
         val dao = AppDatabase.getDatabase(this).lockedAppDao()
         serviceScope.launch {
-            dao.getAllLockedApps().collect { apps ->
-                lockedApps.clear()
+            dao.getAllLockedApps().collect {
+                refreshLockedApps()
+            }
+        }
+    }
+
+    private fun refreshLockedApps() {
+        serviceScope.launch {
+            val dao = AppDatabase.getDatabase(this@AppMonitorService).lockedAppDao()
+            val apps = dao.getLockedAppsList()
+            val isBudgetExceeded = sharedPref.getBoolean("is_budget_exceeded", false)
+
+            lockedApps.clear()
+            if (isBudgetExceeded) {
+                // 예산 초과 시: 리스트에 있는 모든 앱 무조건 차단
+                lockedApps.addAll(apps.map { it.packageName })
+                Log.d(TAG, "예산 초과 모드: 모든 앱(${lockedApps.size}개) 차단 활성화")
+            } else {
+                // 일반 상태: 사용자가 켠 앱만 차단
                 lockedApps.addAll(apps.filter { it.isActive }.map { it.packageName })
+                Log.d(TAG, "일반 모드: 선택된 앱(${lockedApps.size}개) 차단 활성화")
             }
         }
     }
@@ -179,12 +132,14 @@ class AppMonitorService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         isRunning = true
+        refreshLockedApps()
         handler.post(monitorRunnable)
         return START_STICKY
     }
 
     override fun onDestroy() {
         isRunning = false
+        sharedPref.unregisterOnSharedPreferenceChangeListener(prefListener)
         handler.removeCallbacks(monitorRunnable)
         super.onDestroy()
     }

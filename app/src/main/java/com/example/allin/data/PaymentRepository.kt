@@ -1,18 +1,12 @@
 package com.example.allin.data
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
 import android.content.Context
-import android.os.Build
-import androidx.core.app.NotificationCompat
-import com.example.allin.R
+import com.example.allin.BudgetAlertNotifier
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.FieldValue
 import com.google.firebase.firestore.Query
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.tasks.await
-import com.example.allin.NotificationSettings
 
 class PaymentRepository(private val paymentDao: PaymentDao) {
 
@@ -50,7 +44,7 @@ class PaymentRepository(private val paymentDao: PaymentDao) {
                 paymentDao.insertAll(payments)
             }
         } catch (e: Exception) {
-            // Log error or handle
+            // Log error
         }
     }
 
@@ -153,51 +147,17 @@ class PaymentRepository(private val paymentDao: PaymentDao) {
                         .collection("reports").document(docId)
                         .update("total_spent", newTotalSpent)
 
-                    // 2. 예산 대비 비율 체크 및 알림
+                    // 2. 통합 알림 및 자동 잠금 로직 호출
                     if (budget > 0) {
-                        checkBudgetThreshold(context, budget, currentSpent, newTotalSpent)
+                        BudgetAlertNotifier.notifyIfThresholdCrossed(
+                            context,
+                            budget,
+                            currentSpent,
+                            newTotalSpent
+                        )
                     }
                 }
             }
-    }
-
-    private fun checkBudgetThreshold(context: Context, budget: Long, oldSpent: Long, newSpent: Long) {
-        val oldPercent = (oldSpent.toDouble() / budget * 100).toInt()
-        val newPercent = (newSpent.toDouble() / budget * 100).toInt()
-
-        val message = when {
-            oldPercent < 100 && newPercent >= 100 -> "예산을 모두 사용함. 이제부터 길냥이정식도 못먹음 짬타이거 ㄱㄱ"
-            oldPercent < 90 && newPercent >= 90 -> "90%를 사용했어요. 길냥이정식이 얼마 안남았어요."
-            oldPercent < 80 && newPercent >= 80 -> "이제 길냥이정식 먹을시간이에요."
-            oldPercent < 50 && newPercent >= 50 -> "우와 50퍼나 사용했어요."
-            else -> null
-        }
-
-        if (message != null) {
-            sendBudgetNotification(context, message)
-        }
-    }
-
-    private fun sendBudgetNotification(context: Context, message: String) {
-        if (!NotificationSettings.isBudgetAlertEnabled(context)) return
-
-        val channelId = "BudgetThresholdChannel"
-        val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(channelId, "예산 사용 알림", NotificationManager.IMPORTANCE_HIGH)
-            notificationManager.createNotificationChannel(channel)
-        }
-
-        val notification = NotificationCompat.Builder(context, channelId)
-            .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("예산 관리 알림")
-            .setContentText(message)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setAutoCancel(true)
-            .build()
-
-        notificationManager.notify(3001, notification)
     }
 
     suspend fun deleteAll() {

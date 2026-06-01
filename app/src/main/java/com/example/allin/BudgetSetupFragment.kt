@@ -94,8 +94,6 @@ class BudgetFragment : Fragment() {
 
         btnSaveBudget.setOnClickListener { saveData() }
 
-        // ❌ 네비게이션 리스너는 MainActivity에서 관리하므로 삭제
-
         dimView.setOnClickListener { }
     }
 
@@ -109,8 +107,6 @@ class BudgetFragment : Fragment() {
         spCategory.visibility = View.GONE
         dimView.visibility = View.VISIBLE
         cardAddPlan.visibility = View.VISIBLE
-        dimView.bringToFront()
-        cardAddPlan.bringToFront()
     }
 
     private fun showAddExpensePopup(category: String) {
@@ -128,9 +124,6 @@ class BudgetFragment : Fragment() {
 
         dimView.visibility = View.VISIBLE
         cardAddPlan.visibility = View.VISIBLE
-
-        dimView.bringToFront()
-        cardAddPlan.bringToFront()
     }
 
     private fun hidePopup() {
@@ -145,11 +138,7 @@ class BudgetFragment : Fragment() {
         val amountStr = etInputAmount.text.toString().trim()
         if (amountStr.isEmpty()) return
 
-        val amount = amountStr.toLongOrNull()
-        if (amount == null) {
-            Toast.makeText(requireContext(), "올바른 숫자만 입력해 주세요.", Toast.LENGTH_SHORT).show()
-            return
-        }
+        val amount = amountStr.toLongOrNull() ?: return
 
         if (tvPopupTitle.text == "이번 주 계획 추가") {
             db.collection("users").document(currentUser.uid)
@@ -160,9 +149,7 @@ class BudgetFragment : Fragment() {
                 .addOnSuccessListener { snapshots ->
                     if (!snapshots.isEmpty) {
                         snapshots.documents[0].reference.update("budget_usage", amount)
-                            .addOnSuccessListener {
-                                savePlanToLocal(amount)
-                            }
+                            .addOnSuccessListener { savePlanToLocal(amount) }
                     } else {
                         val newReport = hashMapOf(
                             "budget_usage" to amount,
@@ -172,9 +159,7 @@ class BudgetFragment : Fragment() {
                             "report_type" to "weekly"
                         )
                         db.collection("users").document(currentUser.uid).collection("reports").add(newReport)
-                            .addOnSuccessListener {
-                                savePlanToLocal(amount)
-                            }
+                            .addOnSuccessListener { savePlanToLocal(amount) }
                     }
                 }
         } else {
@@ -185,54 +170,35 @@ class BudgetFragment : Fragment() {
                 "amount" to amount,
                 "category" to category,
                 "store_name" to storeName,
-                "transaction_date" to Timestamp.now(),
-                "payment_method" to "기타"
+                "transaction_date" to Timestamp.now()
             )
 
             db.collection("users").document(currentUser.uid).collection("transactions")
                 .add(transaction)
-                .addOnSuccessListener {
-                    updateTotalSpent(currentUser.uid)
-                }
+                .addOnSuccessListener { updateTotalSpent(currentUser.uid) }
         }
         hidePopup()
     }
 
     private fun updateTotalSpent(uid: String) {
-        db.collection("users").document(uid).collection("transactions")
-            .get()
-            .addOnSuccessListener { snapshots ->
-                val total = snapshots.documents.sumOf { it.getLong("amount") ?: 0L }
+        db.collection("users").document(uid).collection("transactions").get().addOnSuccessListener { snapshots ->
+            val total = snapshots.documents.sumOf { it.getLong("amount") ?: 0L }
+            db.collection("users").document(uid).collection("reports")
+                .orderBy("start_date", Query.Direction.DESCENDING)
+                .limit(1)
+                .get()
+                .addOnSuccessListener { reports ->
+                    if (!reports.isEmpty) {
+                        val report = reports.documents[0]
+                        val budget = report.getLong("budget_usage") ?: 0L
+                        val oldSpent = report.getLong("total_spent") ?: 0L
+                        report.reference.update("total_spent", total)
 
-                db.collection("users").document(uid).collection("reports")
-                    .orderBy("start_date", Query.Direction.DESCENDING)
-                    .limit(1)
-                    .get()
-                    .addOnSuccessListener { reports ->
-                        if (!reports.isEmpty) {
-                            val report = reports.documents[0]
-
-                            val budget = report.getLong("budget_usage") ?: 0L
-                            val oldSpent = report.getLong("total_spent") ?: 0L
-
-                            report.reference.update("total_spent", total)
-
-                            BudgetAlertNotifier.notifyIfThresholdCrossed(
-                                requireContext(),
-                                budget,
-                                oldSpent,
-                                total
-                            )
-
-                            Log.d("BudgetFragment", "총 지출액 업데이트 완료: ${total}원")
-                        } else {
-                            Log.d("BudgetFragment", "서버에 주간 계획서가 없어 지출 합산 업데이트를 건너뜁니다.")
-                        }
+                        // [핵심] 지출 업데이트 시 예산 초과 체크 및 잠금 실행
+                        BudgetAlertNotifier.notifyIfThresholdCrossed(requireContext(), budget, oldSpent, total)
                     }
-                    .addOnFailureListener {
-                        Log.e("BudgetFragment", "리포트 조회 실패", it)
-                    }
-            }
+                }
+        }
     }
 
     private fun deletePlan() {
@@ -247,8 +213,9 @@ class BudgetFragment : Fragment() {
         val sharedPref = requireContext().getSharedPreferences("AppLockPrefs", Context.MODE_PRIVATE)
         sharedPref.edit().apply {
             putBoolean("has_weekly_plan", false)
+            putBoolean("is_budget_exceeded", false) // 초과 상태도 해제
             putInt("weekly_budget", 0)
-            commit() // 즉시 물리 반영
+            commit()
         }
         Toast.makeText(requireContext(), "계획이 삭제되었습니다.", Toast.LENGTH_SHORT).show()
     }
@@ -265,6 +232,11 @@ class BudgetFragment : Fragment() {
                     val doc = snapshots.documents[0]
                     val budget = doc.getLong("budget_usage") ?: 0L
                     val spent = doc.getLong("total_spent") ?: 0L
+
+                    // [추가] 실시간 데이터 로드 시마다 예산 체크
+                    BudgetAlertNotifier.notifyIfThresholdCrossed(requireContext(), budget, spent, spent)
+
+                    if (budget > 0) savePlanToLocal(budget)
                     updateUI(budget, spent)
                 } else {
                     updateUI(0, 0)
@@ -309,26 +281,16 @@ class BudgetFragment : Fragment() {
     }
 
     private fun renderCategoryList(transactions: List<com.google.firebase.firestore.DocumentSnapshot>) {
-        val context = context ?: return
-        
         llCategoryList.removeAllViews()
         val dec = DecimalFormat("#,###")
-
         categories.forEach { category ->
-            val catUsed = transactions.filter { it.getString("category") == category }
-                .sumOf { it.getLong("amount") ?: 0L }
-            val catGoal = 50000 // 예시 목표액
-
+            val catUsed = transactions.filter { it.getString("category") == category }.sumOf { it.getLong("amount") ?: 0L }
+            val catGoal = 50000 
             val itemView = LayoutInflater.from(requireContext()).inflate(R.layout.item_budget_category, llCategoryList, false)
             itemView.findViewById<TextView>(R.id.tvCatName).text = category
             itemView.findViewById<TextView>(R.id.tvCatDetail).text = "${dec.format(catUsed)} / ${dec.format(catGoal)} 원"
-
-            val pb = itemView.findViewById<ProgressBar>(R.id.pbCatUsage)
-            pb.progress = if (catGoal > 0) (catUsed.toFloat() / catGoal * 100).toInt() else 0
-
-            itemView.findViewById<CardView>(R.id.btnAddExpense).setOnClickListener {
-                showAddExpensePopup(category)
-            }
+            itemView.findViewById<ProgressBar>(R.id.pbCatUsage).progress = if (catGoal > 0) (catUsed.toFloat() / catGoal * 100).toInt() else 0
+            itemView.findViewById<CardView>(R.id.btnAddExpense).setOnClickListener { showAddExpensePopup(category) }
             llCategoryList.addView(itemView)
         }
     }
@@ -338,8 +300,7 @@ class BudgetFragment : Fragment() {
         sharedPref.edit().apply {
             putBoolean("has_weekly_plan", true)
             putInt("weekly_budget", amount.toInt())
-            commit() // 즉시 물리 파일에 저장하여 서비스가 바로 읽을 수 있게 함
+            commit()
         }
-        android.util.Log.d("BudgetFragment", "로컬 주머니(AppLockPrefs)에 주간 계획 true 동기화 완료!")
     }
 }

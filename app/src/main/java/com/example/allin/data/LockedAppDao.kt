@@ -25,4 +25,7 @@ interface LockedAppDao {
 
     @Update
     suspend fun updateLockedApp(lockedApp: LockedApp)
+
+    @Query("UPDATE locked_apps SET isActive = 1")
+    suspend fun activateAll()
 }

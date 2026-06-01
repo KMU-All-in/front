@@ -4,10 +4,12 @@ import android.app.ActivityManager
 import android.app.AppOpsManager
 import android.content.Context
 import android.content.Intent
+import android.content.SharedPreferences
 import android.graphics.Color
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
+import android.view.View
 import android.widget.*
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
@@ -37,13 +39,26 @@ class AppLockActivity : AppCompatActivity() {
 
     private lateinit var adapter: LockedAppAdapter
     private lateinit var repository: LockedAppRepository
+    private lateinit var sharedPref: SharedPreferences
     private val db = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
+
+    private val prefListener = SharedPreferences.OnSharedPreferenceChangeListener { prefs, key ->
+        if (key == "is_budget_exceeded") {
+            runOnUiThread { 
+                checkBudgetAndForceLock() 
+                observeLockedApps() 
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_app_lock)
         hideSystemBars()
+
+        sharedPref = getSharedPreferences("AppLockPrefs", Context.MODE_PRIVATE)
+        sharedPref.registerOnSharedPreferenceChangeListener(prefListener)
 
         val dao = AppDatabase.getDatabase(applicationContext).lockedAppDao()
         repository = LockedAppRepository(dao)
@@ -55,13 +70,32 @@ class AppLockActivity : AppCompatActivity() {
         observeLockedApps()
 
         repository.syncFromFirestore(packageManager)
-        swMainLock.isChecked = isServiceRunning(AppMonitorService::class.java)
-        updateLockStatusText(swMainLock.isChecked)
     }
 
-    override fun onWindowFocusChanged(hasFocus: Boolean) {
-        super.onWindowFocusChanged(hasFocus)
-        if (hasFocus) hideSystemBars()
+    override fun onResume() {
+        super.onResume()
+        hideSystemBars()
+        checkBudgetAndForceLock()
+    }
+
+    private fun checkBudgetAndForceLock() {
+        val isBudgetExceeded = sharedPref.getBoolean("is_budget_exceeded", false)
+
+        if (isBudgetExceeded) {
+            swMainLock.setOnCheckedChangeListener(null)
+            swMainLock.isChecked = true
+            swMainLock.isEnabled = false 
+            setupMainLockListener()
+            
+            tvLockStatus.text = "예산 초과로 잠금 해제 불가"
+            tvLockStatus.setTextColor(Color.parseColor("#F04452"))
+            
+            if (!isServiceRunning(AppMonitorService::class.java)) startLockService()
+        } else {
+            swMainLock.isEnabled = true
+            swMainLock.isChecked = isServiceRunning(AppMonitorService::class.java)
+            updateLockStatusText(swMainLock.isChecked)
+        }
     }
 
     private fun hideSystemBars() {
@@ -86,55 +120,43 @@ class AppLockActivity : AppCompatActivity() {
         adapter = LockedAppAdapter(
             emptyList(),
             onToggle = { packageName, isActive ->
-                lifecycleScope.launch {
-                    repository.updateLockedAppStatus(packageName, isActive)
+                if (sharedPref.getBoolean("is_budget_exceeded", false)) {
+                    Toast.makeText(this, "예산 초과 상태에서는 끌 수 없습니다.", Toast.LENGTH_SHORT).show()
+                    adapter.notifyDataSetChanged()
+                    return@LockedAppAdapter
                 }
+                lifecycleScope.launch { repository.updateLockedAppStatus(packageName, isActive) }
             },
-            onMoreClick = { view, app ->
-                showLockedAppOptions(view, app)
-            }
+            onMoreClick = { view, app -> showLockedAppOptions(view, app) }
         )
-
         rvLockedApps.layoutManager = LinearLayoutManager(this)
         rvLockedApps.adapter = adapter
     }
 
     private fun setupListeners() {
-        btnBack.setOnClickListener {
-            finish()
-        }
-
-        swMainLock.setOnCheckedChangeListener { _, isChecked ->
-            updateLockStatusText(isChecked)
-
-            if (isChecked) {
-                if (hasUsageStatsPermission()) {
-                    startLockService()
-                } else {
-                    swMainLock.isChecked = false
-                    requestUsageStatsPermission()
-                }
-            } else {
-                stopLockService()
-            }
-        }
-
-        btnAddApp.setOnClickListener {
-            startActivity(Intent(this, AppSelectActivity::class.java))
-        }
-
+        btnBack.setOnClickListener { finish() }
+        setupMainLockListener()
+        btnAddApp.setOnClickListener { startActivity(Intent(this, AppSelectActivity::class.java)) }
         btnMoreOptions.setOnClickListener { view ->
             val popup = PopupMenu(this, view)
             popup.menu.add("잠금 리스트 전체 삭제")
-            popup.setOnMenuItemClickListener {
-                showDeleteAllConfirmDialog()
-                true
-            }
+            popup.setOnMenuItemClickListener { showDeleteAllConfirmDialog(); true }
             popup.show()
         }
+        btnChangePassword.setOnClickListener { showPasswordChangeDialog() }
+    }
 
-        btnChangePassword.setOnClickListener {
-            showPasswordChangeDialog()
+    private fun setupMainLockListener() {
+        swMainLock.setOnCheckedChangeListener { _, isChecked ->
+            if (sharedPref.getBoolean("is_budget_exceeded", false)) {
+                swMainLock.isChecked = true
+                return@setOnCheckedChangeListener
+            }
+            updateLockStatusText(isChecked)
+            if (isChecked) {
+                if (hasUsageStatsPermission()) startLockService()
+                else { swMainLock.isChecked = false; requestUsageStatsPermission() }
+            } else stopLockService()
         }
     }
 
@@ -151,33 +173,21 @@ class AppLockActivity : AppCompatActivity() {
     private fun observeLockedApps() {
         lifecycleScope.launch {
             repository.allLockedApps.collect { dbApps ->
+                val isExceeded = sharedPref.getBoolean("is_budget_exceeded", false)
                 val pm = packageManager
                 val uiModels = dbApps.mapNotNull { dbApp ->
                     try {
                         val appInfo = pm.getApplicationInfo(dbApp.packageName, 0)
-                        LockedApp(
+                        // com.example.allin.LockedApp (UI 모델) 사용
+                        com.example.allin.LockedApp(
                             packageName = dbApp.packageName,
                             name = appInfo.loadLabel(pm).toString(),
                             icon = appInfo.loadIcon(pm),
-                            isActive = dbApp.isActive
+                            isActive = if (isExceeded) true else dbApp.isActive
                         )
-                    } catch (e: Exception) {
-                        null
-                    }
+                    } catch (e: Exception) { null }
                 }
-
-                val oldApps = adapter.apps
-                adapter.apps = uiModels
-
-                if (oldApps.size != uiModels.size) {
-                    adapter.notifyDataSetChanged()
-                } else {
-                    for (i in uiModels.indices) {
-                        if (oldApps[i].isActive != uiModels[i].isActive) {
-                            adapter.notifyItemChanged(i)
-                        }
-                    }
-                }
+                adapter.updateData(uiModels)
             }
         }
     }
@@ -192,37 +202,27 @@ class AppLockActivity : AppCompatActivity() {
 
     private fun startLockService() {
         val intent = Intent(this, AppMonitorService::class.java)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            startForegroundService(intent)
-        } else {
-            startService(intent)
-        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
+        else startService(intent)
     }
 
-    private fun stopLockService() {
-        stopService(Intent(this, AppMonitorService::class.java))
-    }
+    private fun stopLockService() = stopService(Intent(this, AppMonitorService::class.java))
 
     private fun hasUsageStatsPermission(): Boolean {
         val appOps = getSystemService(Context.APP_OPS_SERVICE) as AppOpsManager
         val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            appOps.unsafeCheckOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                android.os.Process.myUid(),
-                packageName
-            )
+            appOps.unsafeCheckOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), packageName)
         } else {
-            appOps.checkOpNoThrow(
-                AppOpsManager.OPSTR_GET_USAGE_STATS,
-                android.os.Process.myUid(),
-                packageName
-            )
+            appOps.checkOpNoThrow(AppOpsManager.OPSTR_GET_USAGE_STATS, android.os.Process.myUid(), packageName)
         }
         return mode == AppOpsManager.MODE_ALLOWED
     }
 
-    private fun requestUsageStatsPermission() {
-        startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+    private fun requestUsageStatsPermission() = startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
+
+    override fun onDestroy() {
+        sharedPref.unregisterOnSharedPreferenceChangeListener(prefListener)
+        super.onDestroy()
     }
 
     private fun checkPermissions() {
@@ -238,97 +238,48 @@ class AppLockActivity : AppCompatActivity() {
     private fun showDeleteAllConfirmDialog() {
         val dialog = AlertDialog.Builder(this)
             .setTitle("전체 삭제")
-            .setMessage("쇼핑 앱 잠금 리스트를 모두 삭제하시겠습니까?")
-            .setPositiveButton("삭제") { _, _ ->
-                lifecycleScope.launch {
-                    repository.updateAllLockedApps(emptyList())
-                }
-            }
+            .setMessage("잠금 리스트를 모두 삭제하시겠습니까?")
+            .setPositiveButton("삭제") { _, _ -> lifecycleScope.launch { repository.updateAllLockedApps(emptyList()) } }
             .setNegativeButton("취소", null)
             .create()
-
-        dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE)
-                .setTextColor(Color.parseColor("#F04452"))
-            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
-                .setTextColor(Color.parseColor("#8B94A8"))
-        }
-
         dialog.show()
     }
 
     private fun showPasswordChangeDialog() {
         val currentUser = auth.currentUser ?: return
-
-        val et = EditText(this).apply {
-            inputType = android.text.InputType.TYPE_CLASS_NUMBER
-            hint = "숫자 4자리"
-        }
-
+        val et = EditText(this).apply { inputType = android.text.InputType.TYPE_CLASS_NUMBER; hint = "숫자 4자리" }
         AlertDialog.Builder(this)
             .setTitle("새 비밀번호 설정")
             .setView(et)
             .setPositiveButton("변경") { _, _ ->
                 val pin = et.text.toString()
-
                 if (pin.length == 4) {
-                    val sharedPref = getSharedPreferences("LockPrefs", Context.MODE_PRIVATE)
-                    sharedPref.edit().putString("LOCK_PIN", pin).apply()
-
-                    db.collection("users").document(currentUser.uid)
-                        .update("lock_pin", pin)
-                        .addOnSuccessListener {
-                            Toast.makeText(
-                                this,
-                                "비밀번호가 변경되었습니다.",
-                                Toast.LENGTH_SHORT
-                            ).show()
-                        }
-                } else {
-                    Toast.makeText(
-                        this,
-                        "4자리 숫자를 입력해주세요.",
-                        Toast.LENGTH_SHORT
-                    ).show()
-                }
+                    getSharedPreferences("LockPrefs", Context.MODE_PRIVATE).edit().putString("LOCK_PIN", pin).apply()
+                    db.collection("users").document(currentUser.uid).update("lock_pin", pin)
+                        .addOnSuccessListener { Toast.makeText(this, "비밀번호가 변경되었습니다.", Toast.LENGTH_SHORT).show() }
+                } else Toast.makeText(this, "4자리 숫자를 입력해주세요.", Toast.LENGTH_SHORT).show()
             }
             .setNegativeButton("취소", null)
             .show()
     }
 
-    private fun showLockedAppOptions(anchor: android.view.View, app: LockedApp) {
+    private fun showLockedAppOptions(anchor: android.view.View, app: com.example.allin.LockedApp) {
         val popup = PopupMenu(this, anchor)
         popup.menu.add("삭제")
-
         popup.setOnMenuItemClickListener { menuItem ->
-            if (menuItem.title == "삭제") {
-                showRemoveLockedAppDialog(app)
-            }
+            if (menuItem.title == "삭제") showRemoveLockedAppDialog(app)
             true
         }
-
         popup.show()
     }
 
-    private fun showRemoveLockedAppDialog(app: LockedApp) {
+    private fun showRemoveLockedAppDialog(app: com.example.allin.LockedApp) {
         val dialog = AlertDialog.Builder(this)
             .setTitle("앱 삭제")
             .setMessage("${app.name} 앱을 잠금 리스트에서 삭제하시겠습니까?")
-            .setPositiveButton("삭제") { _, _ ->
-                lifecycleScope.launch {
-                    repository.removeLockedApp(app.packageName)
-                }
-            }
+            .setPositiveButton("삭제") { _, _ -> lifecycleScope.launch { repository.removeLockedApp(app.packageName) } }
             .setNegativeButton("취소", null)
             .create()
-
-        dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE)
-                .setTextColor(Color.parseColor("#F04452"))
-            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
-                .setTextColor(Color.parseColor("#8B94A8"))
-        }
-
         dialog.show()
     }
 }

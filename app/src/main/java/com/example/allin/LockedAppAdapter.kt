@@ -1,6 +1,6 @@
 package com.example.allin
 
-import android.content.pm.PackageManager
+import android.content.Context
 import android.graphics.drawable.Drawable
 import android.view.LayoutInflater
 import android.view.View
@@ -35,13 +35,28 @@ class LockedAppAdapter(
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val app = apps[position]
+        val context = holder.itemView.context
+        val sharedPref = context.getSharedPreferences("AppLockPrefs", Context.MODE_PRIVATE)
+        val isExceeded = sharedPref.getBoolean("is_budget_exceeded", false)
+
         holder.ivIcon.setImageDrawable(app.icon)
         holder.tvName.text = app.name
+        
         holder.swLock.setOnCheckedChangeListener(null)
-        holder.swLock.isChecked = app.isActive
+        
+        // [핵심] 예산 초과 시 무조건 ON으로 보이고 조작 불가 처리
+        if (isExceeded) {
+            holder.swLock.isChecked = true
+            holder.swLock.isEnabled = false
+        } else {
+            holder.swLock.isChecked = app.isActive
+            holder.swLock.isEnabled = true
+        }
+
         holder.swLock.setOnCheckedChangeListener { _, isChecked ->
             onToggle(app.packageName, isChecked)
         }
+        
         holder.btnOptions.setOnClickListener { view ->
             onMoreClick(view, app)
         }
