@@ -16,9 +16,11 @@ import com.example.allin.HomeActivity
 import com.example.allin.data.AppDatabase
 import com.example.allin.data.Payment
 import com.example.allin.data.PaymentRepository
+import com.google.firebase.functions.FirebaseFunctions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.tasks.await
 import java.util.regex.Pattern
 
 class PaymentNotificationListenerService : NotificationListenerService() {
@@ -72,7 +74,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
 
         lastAmount = amount
         lastProcessedTime = currentTime
-        savePayment(fullText, title, amount)
+        savePayment(fullText, title, text, amount)
     }
 
     private fun extractStrictAmount(content: String): Int {
@@ -87,7 +89,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
         for (pattern in patterns) {
             val matcher = pattern.matcher(content)
             if (matcher.find()) {
-                val amountStr = matcher.group(1).replace(",", "")
+                val amountStr = matcher.group(1)?.replace(",", "") ?: continue
                 // 학번(7~8자리) 오인식 방지: 금액 문자열 길이를 제한
                 if (amountStr.length > 7) continue 
                 return amountStr.toIntOrNull() ?: 0
@@ -96,24 +98,61 @@ class PaymentNotificationListenerService : NotificationListenerService() {
         return 0
     }
 
-    private fun savePayment(content: String, title: String, amount: Int) {
+    private fun savePayment(content: String, title: String, text: String, amount: Int) {
         scope.launch {
             try {
-                val storeName = extractStoreName(content, title)
-                val category = classifyCategory(storeName, content)
+                val serverParsed = parseNotificationOnServer(title, text)
+                val storeName = serverParsed?.storeName ?: extractStoreName(content, title)
+                val category = serverParsed?.category ?: classifyCategory(storeName, content)
+                val finalAmount = serverParsed?.amount?.takeIf { it > 0 } ?: amount
 
                 val payment = Payment(
-                    amount = amount,
+                    amount = finalAmount,
                     category = category,
-                    date = System.currentTimeMillis(),
+                    date = serverParsed?.date ?: System.currentTimeMillis(),
                     itemName = "자동 입력",
                     storeName = storeName
                 )
                 repository.insert(payment, applicationContext)
-                sendCompletionNotification(storeName, amount, category)
+                sendCompletionNotification(storeName, finalAmount, category)
             } catch (e: Exception) {
                 Log.e("PaymentListener", "저장 오류", e)
             }
+        }
+    }
+
+    private data class ParsedNotification(
+        val amount: Int,
+        val storeName: String,
+        val category: String,
+        val date: Long
+    )
+
+    private suspend fun parseNotificationOnServer(title: String, content: String): ParsedNotification? {
+        return try {
+            val result = FirebaseFunctions.getInstance()
+                .getHttpsCallable("parseNotification")
+                .call(
+                    hashMapOf(
+                        "title" to title,
+                        "text" to content
+                    )
+                )
+                .await()
+
+            val map = result.getData() as? Map<*, *> ?: return null
+            if (map["success"] != true) return null
+
+            val parsed = map["result"] as? Map<*, *> ?: return null
+            ParsedNotification(
+                amount = (parsed["amount"] as? Number)?.toInt() ?: 0,
+                storeName = parsed["storeName"] as? String ?: "알 수 없음",
+                category = parsed["category"] as? String ?: "기타",
+                date = (parsed["date"] as? Number)?.toLong() ?: System.currentTimeMillis()
+            )
+        } catch (e: Exception) {
+            Log.e("PaymentListener", "서버 문자 파싱 실패, 로컬 분류 사용", e)
+            null
         }
     }
 
@@ -136,7 +175,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
         for (pattern in directStorePatterns) {
             val matcher = pattern.matcher(content)
             if (matcher.find()) {
-                val candidate = matcher.group(1).trim()
+                val candidate = matcher.group(1)?.trim() ?: continue
                 if (candidate.isNotBlank()) return candidate
             }
         }
