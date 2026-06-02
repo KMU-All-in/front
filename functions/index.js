@@ -1036,6 +1036,8 @@ const chromium = require('chrome-aws-lambda');
 const puppeteer = require('puppeteer-core');
 const http = require("http");
 const https = require("https");
+const dns = require("dns").promises;
+const net = require("net");
 
 const PRODUCT_USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
 
@@ -1094,12 +1096,76 @@ function absolutizeUrl(value, baseUrl) {
   }
 }
 
-function requestUrl(url, options = {}) {
+function normalizeHostname(hostname) {
+  return String(hostname || "").toLowerCase().replace(/^\[|\]$/g, "");
+}
+
+function isBlockedIpAddress(address) {
+  const normalized = normalizeHostname(address);
+  const ipVersion = net.isIP(normalized);
+
+  if (ipVersion === 4) {
+    const parts = normalized.split(".").map((part) => Number(part));
+    const [a, b] = parts;
+    return (
+      a === 0 ||
+      a === 10 ||
+      a === 127 ||
+      a >= 224 ||
+      (a === 100 && b >= 64 && b <= 127) ||
+      (a === 169 && b === 254) ||
+      (a === 172 && b >= 16 && b <= 31) ||
+      (a === 192 && b === 168)
+    );
+  }
+
+  if (ipVersion === 6) {
+    return (
+      normalized === "::1" ||
+      normalized.startsWith("fc") ||
+      normalized.startsWith("fd") ||
+      normalized.startsWith("fe8") ||
+      normalized.startsWith("fe9") ||
+      normalized.startsWith("fea") ||
+      normalized.startsWith("feb") ||
+      normalized.startsWith("::ffff:127.") ||
+      normalized.startsWith("::ffff:10.") ||
+      normalized.startsWith("::ffff:192.168.")
+    );
+  }
+
+  return false;
+}
+
+async function assertPublicProductUrl(url) {
+  const parsed = new URL(validateProductUrl(url));
+  const hostname = normalizeHostname(parsed.hostname);
+
+  if (isBlockedIpAddress(hostname)) {
+    throw new HttpsError("invalid-argument", "내부 네트워크 URL은 분석할 수 없습니다.");
+  }
+
+  if (net.isIP(hostname)) return parsed.toString();
+
+  try {
+    const addresses = await dns.lookup(hostname, { all: true, verbatim: true });
+    if (addresses.some((entry) => isBlockedIpAddress(entry.address))) {
+      throw new HttpsError("invalid-argument", "내부 네트워크 URL은 분석할 수 없습니다.");
+    }
+  } catch (error) {
+    if (error instanceof HttpsError) throw error;
+  }
+
+  return parsed.toString();
+}
+
+async function requestUrl(url, options = {}) {
   const { method = "GET", maxBytes = 700000, timeoutMs = 12000, redirectLimit = 5 } = options;
+  const safeUrl = await assertPublicProductUrl(url);
 
   return new Promise((resolve, reject) => {
-    const client = url.startsWith("https://") ? https : http;
-    const req = client.request(url, {
+    const client = safeUrl.startsWith("https://") ? https : http;
+    const req = client.request(safeUrl, {
       method,
       headers: {
         "User-Agent": PRODUCT_USER_AGENT,
@@ -1113,7 +1179,7 @@ function requestUrl(url, options = {}) {
       const location = res.headers.location;
       if ([301, 302, 303, 307, 308].includes(status) && location && redirectLimit > 0) {
         res.resume();
-        const nextUrl = absolutizeUrl(location, url);
+        const nextUrl = absolutizeUrl(location, safeUrl);
         requestUrl(nextUrl, { ...options, method: "GET", redirectLimit: redirectLimit - 1 })
           .then(resolve)
           .catch(reject);
@@ -1123,13 +1189,15 @@ function requestUrl(url, options = {}) {
       const chunks = [];
       let size = 0;
       res.on("data", (chunk) => {
+        if (maxBytes > 0 && size < maxBytes) {
+          const remaining = maxBytes - size;
+          chunks.push(chunk.length > remaining ? chunk.subarray(0, remaining) : chunk);
+        }
         size += chunk.length;
-        if (size <= maxBytes) chunks.push(chunk);
-        else req.destroy();
       });
       res.on("end", () => {
         resolve({
-          finalUrl: res.responseUrl || url,
+          finalUrl: res.responseUrl || safeUrl,
           status,
           headers: res.headers,
           body: Buffer.concat(chunks).toString("utf8"),
@@ -1242,6 +1310,187 @@ function parseProductFromHtml(html, pageUrl, sharedText = "") {
   };
 }
 
+function validateProductUrl(value) {
+  let parsed;
+  try {
+    parsed = new URL(value);
+  } catch (error) {
+    throw new HttpsError("invalid-argument", "올바른 URL이 아닙니다.");
+  }
+
+  if (!["http:", "https:"].includes(parsed.protocol)) {
+    throw new HttpsError("invalid-argument", "http 또는 https URL만 분석할 수 있습니다.");
+  }
+
+  const hostname = parsed.hostname.toLowerCase();
+  const blockedHosts = ["localhost", "127.0.0.1", "0.0.0.0", "::1"];
+  if (blockedHosts.includes(hostname) || hostname.endsWith(".local")) {
+    throw new HttpsError("invalid-argument", "내부 네트워크 URL은 분석할 수 없습니다.");
+  }
+
+  return parsed.toString();
+}
+
+function stripHtmlForAI(html) {
+  return String(html || "")
+    .replace(/<script[\s\S]*?<\/script>/gi, " ")
+    .replace(/<style[\s\S]*?<\/style>/gi, " ")
+    .replace(/<noscript[\s\S]*?<\/noscript>/gi, " ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 12000);
+}
+
+function normalizeAIProductAnalysis(parsed, fallbackProductInfo) {
+  const price = Number(parsed.price || fallbackProductInfo.price || 0);
+  const confidence = Math.max(0, Math.min(1, Number(parsed.confidence) || 0));
+
+  return {
+    productName: cleanProductName(parsed.productName || fallbackProductInfo.name || ""),
+    price: Number.isFinite(price) ? price : 0,
+    currency: parsed.currency || "KRW",
+    brand: parsed.brand || "",
+    description: parsed.description || "",
+    productInfo: Array.isArray(parsed.productInfo) ? parsed.productInfo : [],
+    imageUrl: parsed.imageUrl || fallbackProductInfo.imageUrl || "",
+    availability: parsed.availability || "",
+    confidence,
+    reason: parsed.reason || "",
+  };
+}
+
+async function analyzeProductWithAI({ url, resolvedUrl, html, productInfo, sharedText }) {
+  if (!openai) {
+    throw new HttpsError("failed-precondition", "OPENAI_API_KEY가 설정되어 있지 않습니다.");
+  }
+
+  const pageText = stripHtmlForAI(html);
+  const input = {
+    url,
+    resolvedUrl,
+    sharedText: String(sharedText || "").slice(0, 3000),
+    extractedMetadata: productInfo,
+    pageText,
+  };
+
+  const completion = await openai.chat.completions.create({
+    model: "gpt-4o-mini",
+    temperature: 0,
+    messages: [
+      {
+        role: "system",
+        content: `
+너는 쇼핑몰 상품 페이지 분석 엔진이다.
+URL에서 추출된 메타데이터와 페이지 텍스트를 바탕으로 실제 판매 상품의 정보를 구조화한다.
+
+규칙:
+- 반드시 JSON만 반환한다.
+- 제품명은 쇼핑몰명/사이트명/불필요한 문구를 제거한 실제 상품명으로 작성한다.
+- price는 숫자만 사용한다. 가격을 찾지 못하면 0을 사용한다.
+- currency는 KRW, USD, JPY 같은 ISO 통화 코드로 작성한다. 원화 가격이면 KRW를 사용한다.
+- productInfo에는 색상, 옵션, 카테고리, 배송/할인/판매 상태 등 확인 가능한 핵심 정보만 짧게 넣는다.
+- 페이지에 없는 정보는 추측하지 않는다.
+- 여러 가격이 있으면 현재 구매자가 결제할 가능성이 가장 높은 판매가/할인가를 선택한다.
+`
+      },
+      {
+        role: "user",
+        content: JSON.stringify(input)
+      }
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "product_url_analysis",
+        strict: true,
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          properties: {
+            productName: { type: "string" },
+            price: { type: "number" },
+            currency: { type: "string" },
+            brand: { type: "string" },
+            description: { type: "string" },
+            productInfo: {
+              type: "array",
+              items: { type: "string" }
+            },
+            imageUrl: { type: "string" },
+            availability: { type: "string" },
+            confidence: { type: "number" },
+            reason: { type: "string" }
+          },
+          required: [
+            "productName",
+            "price",
+            "currency",
+            "brand",
+            "description",
+            "productInfo",
+            "imageUrl",
+            "availability",
+            "confidence",
+            "reason"
+          ]
+        }
+      }
+    }
+  });
+
+  const content = completion.choices[0].message.content;
+  return normalizeAIProductAnalysis(JSON.parse(content), productInfo);
+}
+
+exports.analyzeProductUrl = onCall(async (request) => {
+  const { url, sharedText = "" } = request.data || {};
+  const targetUrl = validateProductUrl(url);
+
+  try {
+    const resolvedUrl = await resolveProductUrl(targetUrl);
+    const htmlResponse = await requestUrl(resolvedUrl, {
+      method: "GET",
+      timeoutMs: 15000,
+      maxBytes: 1200000,
+    });
+    const finalUrl = htmlResponse.finalUrl || resolvedUrl;
+    const productInfo = parseProductFromHtml(htmlResponse.body, finalUrl, sharedText);
+    const analysis = await analyzeProductWithAI({
+      url: targetUrl,
+      resolvedUrl: finalUrl,
+      html: htmlResponse.body,
+      productInfo,
+      sharedText,
+    });
+
+    return {
+      success: true,
+      result: {
+        ...analysis,
+        sourceUrl: targetUrl,
+        resolvedUrl: finalUrl,
+        rawExtracted: productInfo,
+      },
+    };
+  } catch (error) {
+    console.error("AI Product URL Analysis Error:", error);
+
+    if (error instanceof HttpsError) {
+      throw error;
+    }
+
+    throw new HttpsError(
+      "internal",
+      "상품 URL AI 분석 중 오류가 발생했습니다: " + error.message
+    );
+  }
+});
+
 exports.advancedProductParse = onCall(async (request) => {
   const { url, sharedText = "" } = request.data || {};
   if (!url) throw new HttpsError("invalid-argument", "URL이 필요합니다.");
@@ -1249,7 +1498,8 @@ exports.advancedProductParse = onCall(async (request) => {
   let browser = null;
 
   try {
-    const resolvedUrl = await resolveProductUrl(url);
+    const targetUrl = await assertPublicProductUrl(url);
+    const resolvedUrl = await assertPublicProductUrl(await resolveProductUrl(targetUrl));
     let productInfo = { name: "", price: 0, imageUrl: "" };
 
     try {
