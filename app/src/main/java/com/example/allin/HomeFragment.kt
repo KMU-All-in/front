@@ -70,7 +70,9 @@ class HomeFragment : Fragment() {
             .limit(1)
             .addSnapshotListener { snapshots, e ->
                 if (e != null || snapshots == null || snapshots.isEmpty) {
-                    updateUI(0, 0)
+                    if (isAdded) {
+                        updateUI(0, 0)
+                    }
                     return@addSnapshotListener
                 }
 
@@ -78,8 +80,19 @@ class HomeFragment : Fragment() {
                 val budgetLimit = document.getLong("budget_usage")?.toLong() ?: 0L
                 val totalSpent = document.getLong("total_spent")?.toLong() ?: 0L
 
-                // [핵심] 홈 화면에서도 데이터가 변경되면 즉시 예산 초과 및 앱 강제 잠금 체크
-                BudgetAlertNotifier.notifyIfThresholdCrossed(requireContext(), budgetLimit, totalSpent, totalSpent)
+                val safeContext = context ?: return@addSnapshotListener
+
+                // 홈 화면에서도 데이터가 변경되면 즉시 예산 초과 및 앱 강제 잠금 체크
+                BudgetAlertNotifier.notifyIfThresholdCrossed(
+                    safeContext,
+                    budgetLimit,
+                    totalSpent,
+                    totalSpent
+                )
+
+                if (!isAdded) {
+                    return@addSnapshotListener
+                }
 
                 updateUI(budgetLimit.toInt(), totalSpent.toInt())
             }

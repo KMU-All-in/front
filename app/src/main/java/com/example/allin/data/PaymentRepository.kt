@@ -25,10 +25,18 @@ class PaymentRepository(private val paymentDao: PaymentDao) {
             
             val payments = snapshots.documents.mapNotNull { doc ->
                 val amount = doc.getLong("amount")?.toInt() ?: return@mapNotNull null
-                val storeName = doc.getString("storeName") ?: "알 수 없음"
-                val date = doc.getLong("date") ?: 0L
+
+                val storeName = doc.getString("storeName")
+                    ?: doc.getString("store_name")
+                    ?: "상점 없음"
+
+                val date = doc.getLong("date")
+                    ?: doc.getTimestamp("transaction_date")?.toDate()?.time
+                    ?: doc.getTimestamp("timestamp")?.toDate()?.time
+                    ?: System.currentTimeMillis()
+
                 val category = doc.getString("category") ?: "기타"
-                val itemName = doc.getString("itemName") ?: ""
+                val itemName = doc.getString("itemName") ?: "직접 입력"
                 
                 Payment(
                     amount = amount,

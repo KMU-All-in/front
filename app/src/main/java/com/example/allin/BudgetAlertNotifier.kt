@@ -100,6 +100,12 @@ object BudgetAlertNotifier {
             .setAutoCancel(true)
             .build()
 
-        notificationManager.notify(System.currentTimeMillis().toInt(), notification)
+        try {
+            notificationManager.notify(System.currentTimeMillis().toInt(), notification)
+        } catch (e: SecurityException) {
+            Log.e(TAG, "예산 알림 권한이 없어 알림을 보낼 수 없습니다.", e)
+        } catch (e: Exception) {
+            Log.e(TAG, "예산 알림 발송 실패", e)
+        }
     }
 }

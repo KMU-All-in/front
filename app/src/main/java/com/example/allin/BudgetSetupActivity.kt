@@ -153,7 +153,12 @@ class BudgetSetupActivity : AppCompatActivity() {
         val currentUser = auth.currentUser ?: return
         val amountStr = etInputAmount.text.toString().trim()
         if (amountStr.isEmpty()) return
-        val amount = amountStr.toLong()
+        val amount = amountStr.replace(",", "").toLongOrNull()
+
+        if (amount == null || amount <= 0L) {
+            Toast.makeText(this, "올바른 금액을 입력해주세요.", Toast.LENGTH_SHORT).show()
+            return
+        }
 
         if (tvPopupTitle.text == "이번 주 계획 추가") {
             db.collection("users").document(currentUser.uid)
