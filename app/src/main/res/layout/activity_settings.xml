@@ -217,6 +217,7 @@
                             android:textStyle="bold" />
                     </LinearLayout>
                     <Button
+                        android:id="@+id/btnChangeLockPassword"
                         android:layout_width="match_parent"
                         android:layout_height="45dp"
                         android:layout_marginTop="16dp"

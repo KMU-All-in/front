@@ -143,7 +143,9 @@ class AppLockActivity : AppCompatActivity() {
             popup.setOnMenuItemClickListener { showDeleteAllConfirmDialog(); true }
             popup.show()
         }
-        btnChangePassword.setOnClickListener { showPasswordChangeDialog() }
+        btnChangePassword.setOnClickListener {
+            LockPasswordDialog.show(this)
+        }
     }
 
     private fun setupMainLockListener() {

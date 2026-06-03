@@ -60,6 +60,10 @@ class SettingsActivity : AppCompatActivity() {
             showEmailEditDialog()
         }
 
+        findViewById<Button>(R.id.btnChangeLockPassword).setOnClickListener {
+            LockPasswordDialog.show(this)
+        }
+
         // A1: 알림 설정 스위치 로직
         setupNotificationSwitches()
     }
