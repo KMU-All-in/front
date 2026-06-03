@@ -24,11 +24,14 @@ import android.text.method.PasswordTransformationMethod
 import com.google.firebase.auth.FirebaseAuthException
 import android.graphics.Typeface
 import com.google.firebase.functions.FirebaseFunctions
+import com.google.android.gms.tasks.Tasks
+import com.google.firebase.firestore.FirebaseFirestore
 
 class SettingsActivity : AppCompatActivity() {
 
     private lateinit var auth: FirebaseAuth
     private lateinit var tvUserEmail: TextView
+    private val db = FirebaseFirestore.getInstance()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -62,6 +65,10 @@ class SettingsActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.btnChangeLockPassword).setOnClickListener {
             LockPasswordDialog.show(this)
+        }
+
+        findViewById<TextView>(R.id.btnDeleteAccount).setOnClickListener {
+            showDeleteAccountDialog()
         }
 
         // A1: 알림 설정 스위치 로직
@@ -265,7 +272,131 @@ class SettingsActivity : AppCompatActivity() {
         if (hasFocus) hideSystemBars()
     }
 
+    private fun showDeleteAccountDialog() {
+        val currentEmail = auth.currentUser?.email
+        if (currentEmail.isNullOrEmpty()) {
+            Toast.makeText(this, "로그인 정보를 찾을 수 없습니다.", Toast.LENGTH_SHORT).show()
+            return
+        }
 
+        val container = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(48, 20, 48, 0)
+        }
+
+        val etCurrentPassword = EditText(this).apply {
+            hint = "현재 비밀번호"
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            typeface = Typeface.DEFAULT
+            transformationMethod = PasswordTransformationMethod.getInstance()
+            setSingleLine(true)
+        }
+
+        container.addView(etCurrentPassword)
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("계정 삭제")
+            .setMessage("계정을 삭제하면 예산, 결제 내역, 가짜 장바구니, 앱 잠금 설정이 삭제됩니다. 계속하려면 현재 비밀번호를 입력해주세요.")
+            .setView(container)
+            .setPositiveButton("삭제", null)
+            .setNegativeButton("취소", null)
+            .create()
+
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(Color.parseColor("#F44336"))
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(Color.parseColor("#8B94A8"))
+
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val password = etCurrentPassword.text.toString()
+                if (password.isEmpty()) {
+                    Toast.makeText(this, "현재 비밀번호를 입력해주세요.", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+
+                deleteAccount(currentEmail, password, dialog)
+            }
+        }
+
+        dialog.show()
+    }
+
+    private fun deleteAccount(currentEmail: String, password: String, dialog: AlertDialog) {
+        val user = auth.currentUser
+        if (user == null) {
+            Toast.makeText(this, "로그인 정보를 찾을 수 없습니다.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        val credential = EmailAuthProvider.getCredential(currentEmail, password)
+        user.reauthenticate(credential)
+            .addOnSuccessListener {
+                deleteUserFirestoreData(user.uid) {
+                    user.delete()
+                        .addOnSuccessListener {
+                            dialog.dismiss()
+                            clearLocalUserData()
+                            Toast.makeText(this, "계정이 삭제되었습니다.", Toast.LENGTH_SHORT).show()
+                            moveToLogin()
+                        }
+                        .addOnFailureListener { e ->
+                            Toast.makeText(this, getDeleteAccountErrorMessage(e), Toast.LENGTH_LONG).show()
+                        }
+                }
+            }
+            .addOnFailureListener {
+                Toast.makeText(this, "현재 비밀번호가 올바르지 않습니다.", Toast.LENGTH_SHORT).show()
+            }
+    }
+
+    private fun deleteUserFirestoreData(uid: String, onComplete: () -> Unit) {
+        val userRef = db.collection("users").document(uid)
+        val subCollections = listOf("reports", "transactions", "fakecart")
+
+        val deleteTasks = subCollections.map { collectionName ->
+            userRef.collection(collectionName).get().continueWithTask { snapshotTask ->
+                val batch = db.batch()
+                snapshotTask.result?.documents?.forEach { document ->
+                    batch.delete(document.reference)
+                }
+                batch.commit()
+            }
+        }
+
+        Tasks.whenAll(deleteTasks)
+            .continueWithTask {
+                userRef.delete()
+            }
+            .addOnSuccessListener {
+                onComplete()
+            }
+            .addOnFailureListener { e ->
+                Toast.makeText(this, "사용자 데이터 삭제 실패: ${e.message}", Toast.LENGTH_LONG).show()
+            }
+    }
+
+    private fun clearLocalUserData() {
+        getSharedPreferences("LockPrefs", Context.MODE_PRIVATE).edit().clear().apply()
+        getSharedPreferences("AppLockPrefs", Context.MODE_PRIVATE).edit().clear().apply()
+        getSharedPreferences(NotificationSettings.PREFS_NAME, Context.MODE_PRIVATE).edit().clear().apply()
+    }
+
+    private fun moveToLogin() {
+        val intent = Intent(this, AllInActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        startActivity(intent)
+        finish()
+    }
+
+    private fun getDeleteAccountErrorMessage(e: Exception): String {
+        val errorCode = (e as? FirebaseAuthException)?.errorCode
+        return when (errorCode) {
+            "ERROR_REQUIRES_RECENT_LOGIN" ->
+                "보안을 위해 다시 로그인한 뒤 계정 삭제를 시도해주세요."
+
+            else ->
+                "계정 삭제 실패: ${e.message}"
+        }
+    }
 
 
 }
