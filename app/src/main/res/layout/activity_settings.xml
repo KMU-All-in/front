@@ -113,10 +113,14 @@
                                 android:textSize="12sp" />
                         </LinearLayout>
                         <TextView
+                            android:id="@+id/btnEditProfile"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_alignParentEnd="true"
                             android:layout_centerVertical="true"
+                            android:clickable="true"
+                            android:focusable="true"
+                            android:padding="8dp"
                             android:text="수정 >"
                             android:textColor="#9E9E9E"
                             android:textSize="12sp" />

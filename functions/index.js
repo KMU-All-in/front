@@ -1,5 +1,8 @@
 const { onCall, HttpsError } = require("firebase-functions/v2/https");
+const admin = require("firebase-admin");
 const OpenAI = require("openai");
+
+admin.initializeApp();
 
 function getOpenAIClient() {
   if (!process.env.OPENAI_API_KEY) {
@@ -12,6 +15,26 @@ function getOpenAIClient() {
 }
 
 const openai = getOpenAIClient();
+
+exports.checkEmailExists = onCall(async (request) => {
+  const email = String(request.data?.email || "").trim().toLowerCase();
+
+  if (!email) {
+    throw new HttpsError("invalid-argument", "Email is required.");
+  }
+
+  try {
+    await admin.auth().getUserByEmail(email);
+    return { exists: true };
+  } catch (error) {
+    if (error.code === "auth/user-not-found") {
+      return { exists: false };
+    }
+
+    console.error("checkEmailExists error:", error);
+    throw new HttpsError("internal", "Failed to check email.");
+  }
+});
 
 const fieldMap = {
   date: ["date", "payment_date", "paymentDate", "used_at", "승인일자", "결제일", "이용일자", "거래일자"],
@@ -1032,8 +1055,6 @@ exports.generateMonthlyReport = onCall((request) => {
 // 고급 파싱 기능 (Puppeteer 활용)
 // -----------------------------
 
-const chromium = require('chrome-aws-lambda');
-const puppeteer = require('puppeteer-core');
 const http = require("http");
 const https = require("https");
 const dns = require("dns").promises;
@@ -1513,6 +1534,9 @@ exports.advancedProductParse = onCall(async (request) => {
     if (productInfo.name && productInfo.price > 0 && productInfo.imageUrl) {
       return { success: true, result: productInfo };
     }
+
+    const chromium = require('chrome-aws-lambda');
+    const puppeteer = require('puppeteer-core');
 
     browser = await puppeteer.launch({
       args: chromium.args,
