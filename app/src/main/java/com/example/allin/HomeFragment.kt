@@ -20,6 +20,8 @@ import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.Query
 import java.text.DecimalFormat
+// 캐릭터 뽀용~하는거떔에추가햇어요
+import android.view.animation.OvershootInterpolator
 
 class HomeFragment : Fragment() {
 
@@ -185,5 +187,31 @@ class HomeFragment : Fragment() {
         view.findViewById<CardView>(R.id.menuAppLock).setOnClickListener {
             startActivity(Intent(requireContext(), AppLockActivity::class.java))
         }
+        ivCharacter.setOnClickListener {
+            playCharacterBounce()
+        }
+    }
+
+    private fun playCharacterBounce() {
+        ivCharacter.animate()
+            .cancel()
+
+        ivCharacter.scaleX = 1f
+        ivCharacter.scaleY = 1f
+
+        ivCharacter.animate()
+            .scaleX(1.05f)
+            .scaleY(1.05f)
+            .setDuration(140)
+            .setInterpolator(OvershootInterpolator())
+            .withEndAction {
+                ivCharacter.animate()
+                    .scaleX(1f)
+                    .scaleY(1f)
+                    .setDuration(180)
+                    .setInterpolator(OvershootInterpolator())
+                    .start()
+            }
+            .start()
     }
 }
