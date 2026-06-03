@@ -7,6 +7,8 @@ import android.widget.EditText
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.google.firebase.auth.FirebaseAuth
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 
 class AllInActivity : AppCompatActivity() {
     private lateinit var auth: FirebaseAuth
@@ -31,6 +33,7 @@ class AllInActivity : AppCompatActivity() {
         }
 
         setContentView(R.layout.activity_login)
+        hideSystemBars()
 
         val etEmail = findViewById<EditText>(R.id.etEmail) 
         val etPassword = findViewById<EditText>(R.id.etPassword)
@@ -70,5 +73,17 @@ class AllInActivity : AppCompatActivity() {
             val intent = Intent(this, TermsActivity::class.java)
             startActivity(intent)
         }
+    }
+
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        if (hasFocus) hideSystemBars()
+    }
+
+    private fun hideSystemBars() {
+        val windowInsetsController = WindowInsetsControllerCompat(window, window.decorView)
+        windowInsetsController.systemBarsBehavior =
+            WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        windowInsetsController.hide(WindowInsetsCompat.Type.systemBars())
     }
 }

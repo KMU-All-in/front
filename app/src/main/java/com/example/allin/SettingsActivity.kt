@@ -26,6 +26,8 @@ import android.graphics.Typeface
 import com.google.firebase.functions.FirebaseFunctions
 import com.google.android.gms.tasks.Tasks
 import com.google.firebase.firestore.FirebaseFirestore
+import android.graphics.drawable.ColorDrawable
+import android.view.ViewGroup
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -111,52 +113,41 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun showEmailEditDialog() {
         val currentEmail = auth.currentUser?.email
-
         if (currentEmail.isNullOrEmpty()) {
             Toast.makeText(this, "현재 로그인 정보를 찾을 수 없습니다.", Toast.LENGTH_SHORT).show()
             return
         }
 
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(48, 20, 48, 0)
-        }
+        val dialogView = layoutInflater.inflate(R.layout.dialog_edit_email, null)
 
-        val etNewEmail = EditText(this).apply {
-            hint = "새 이메일"
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
-            setSingleLine(true)
-        }
-
-        val etCurrentPassword = EditText(this).apply {
-            hint = "현재 비밀번호"
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            typeface = Typeface.DEFAULT
-            transformationMethod = PasswordTransformationMethod.getInstance()
-            setSingleLine(true)
-        }
-
-        container.addView(etNewEmail)
-        container.addView(etCurrentPassword)
+        val etNewEmail = dialogView.findViewById<EditText>(R.id.etNewEmail)
+        val etCurrentPassword = dialogView.findViewById<EditText>(R.id.etCurrentPassword)
+        val btnCancel = dialogView.findViewById<Button>(R.id.btnCancel)
+        val btnSendEmail = dialogView.findViewById<Button>(R.id.btnSendEmail)
 
         val dialog = AlertDialog.Builder(this)
-            .setTitle("이메일 수정")
-            .setMessage("새 이메일로 인증 메일을 보냅니다. 인증을 완료해야 이메일이 변경됩니다.")
-            .setView(container)
-            .setPositiveButton("인증 메일 보내기", null)
-            .setNegativeButton("취소", null)
+            .setView(dialogView)
             .create()
 
         dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(Color.parseColor("#4F6FFF"))
-            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(Color.parseColor("#8B94A8"))
+            dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
 
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                val newEmail = etNewEmail.text.toString().trim()
-                val password = etCurrentPassword.text.toString()
+            val width = (resources.displayMetrics.widthPixels * 0.86).toInt()
+            dialog.window?.setLayout(
+                width,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        }
 
-                requestEmailChange(currentEmail, newEmail, password, dialog)
-            }
+        btnCancel.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        btnSendEmail.setOnClickListener {
+            val newEmail = etNewEmail.text.toString().trim()
+            val password = etCurrentPassword.text.toString()
+
+            requestEmailChange(currentEmail, newEmail, password, dialog)
         }
 
         dialog.show()
@@ -279,42 +270,39 @@ class SettingsActivity : AppCompatActivity() {
             return
         }
 
-        val container = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(48, 20, 48, 0)
-        }
+        val dialogView = layoutInflater.inflate(R.layout.dialog_delete_account, null)
 
-        val etCurrentPassword = EditText(this).apply {
-            hint = "현재 비밀번호"
-            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-            typeface = Typeface.DEFAULT
-            transformationMethod = PasswordTransformationMethod.getInstance()
-            setSingleLine(true)
-        }
-
-        container.addView(etCurrentPassword)
+        val etCurrentPassword = dialogView.findViewById<EditText>(R.id.etCurrentPassword)
+        val btnCancel = dialogView.findViewById<Button>(R.id.btnCancel)
+        val btnDelete = dialogView.findViewById<Button>(R.id.btnDelete)
 
         val dialog = AlertDialog.Builder(this)
-            .setTitle("계정 삭제")
-            .setMessage("계정을 삭제하면 예산, 결제 내역, 가짜 장바구니, 앱 잠금 설정이 삭제됩니다. 계속하려면 현재 비밀번호를 입력해주세요.")
-            .setView(container)
-            .setPositiveButton("삭제", null)
-            .setNegativeButton("취소", null)
+            .setView(dialogView)
             .create()
 
         dialog.setOnShowListener {
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setTextColor(Color.parseColor("#F44336"))
-            dialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTextColor(Color.parseColor("#8B94A8"))
+            dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
 
-            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
-                val password = etCurrentPassword.text.toString()
-                if (password.isEmpty()) {
-                    Toast.makeText(this, "현재 비밀번호를 입력해주세요.", Toast.LENGTH_SHORT).show()
-                    return@setOnClickListener
-                }
+            val width = (resources.displayMetrics.widthPixels * 0.86).toInt()
+            dialog.window?.setLayout(
+                width,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+        }
 
-                deleteAccount(currentEmail, password, dialog)
+        btnCancel.setOnClickListener {
+            dialog.dismiss()
+        }
+
+        btnDelete.setOnClickListener {
+            val password = etCurrentPassword.text.toString()
+
+            if (password.isEmpty()) {
+                Toast.makeText(this, "현재 비밀번호를 입력해주세요.", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
             }
+
+            deleteAccount(currentEmail, password, dialog)
         }
 
         dialog.show()
