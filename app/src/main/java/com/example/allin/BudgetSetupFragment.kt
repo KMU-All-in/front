@@ -16,6 +16,7 @@ import com.google.firebase.firestore.Query
 import java.text.DecimalFormat
 import java.util.*
 import android.util.Log
+import com.google.firebase.firestore.ListenerRegistration
 
 class BudgetFragment : Fragment() {
 
@@ -41,6 +42,9 @@ class BudgetFragment : Fragment() {
 
     private val db = FirebaseFirestore.getInstance()
     private val auth = FirebaseAuth.getInstance()
+
+    private var reportListener: ListenerRegistration? = null
+    private var transactionListener: ListenerRegistration? = null
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -195,7 +199,8 @@ class BudgetFragment : Fragment() {
                         report.reference.update("total_spent", total)
 
                         // [핵심] 지출 업데이트 시 예산 초과 체크 및 잠금 실행
-                        BudgetAlertNotifier.notifyIfThresholdCrossed(requireContext(), budget, oldSpent, total)
+                        val safeContext = context ?: return@addOnSuccessListener
+                        BudgetAlertNotifier.notifyIfThresholdCrossed(safeContext, budget, oldSpent, total)
                     }
                 }
         }
@@ -210,31 +215,34 @@ class BudgetFragment : Fragment() {
             for (doc in it) doc.reference.delete()
         }
 
-        val sharedPref = requireContext().getSharedPreferences("AppLockPrefs", Context.MODE_PRIVATE)
+        val safeContext = context ?: return
+        val sharedPref = safeContext.getSharedPreferences("AppLockPrefs", Context.MODE_PRIVATE)
         sharedPref.edit().apply {
             putBoolean("has_weekly_plan", false)
             putBoolean("is_budget_exceeded", false) // 초과 상태도 해제
             putInt("weekly_budget", 0)
             commit()
         }
-        Toast.makeText(requireContext(), "계획이 삭제되었습니다.", Toast.LENGTH_SHORT).show()
+        Toast.makeText(safeContext, "계획이 삭제되었습니다.", Toast.LENGTH_SHORT).show()
     }
 
     private fun observeData() {
         val currentUser = auth.currentUser ?: return
 
-        db.collection("users").document(currentUser.uid)
+        reportListener = db.collection("users").document(currentUser.uid)
             .collection("reports")
             .orderBy("start_date", Query.Direction.DESCENDING)
             .limit(1)
             .addSnapshotListener { snapshots, _ ->
+                if (!isAdded) return@addSnapshotListener
+
                 if (snapshots != null && !snapshots.isEmpty) {
                     val doc = snapshots.documents[0]
                     val budget = doc.getLong("budget_usage") ?: 0L
                     val spent = doc.getLong("total_spent") ?: 0L
 
-                    // [추가] 실시간 데이터 로드 시마다 예산 체크
-                    BudgetAlertNotifier.notifyIfThresholdCrossed(requireContext(), budget, spent, spent)
+                    val safeContext = context ?: return@addSnapshotListener
+                    BudgetAlertNotifier.notifyIfThresholdCrossed(safeContext, budget, spent, spent)
 
                     if (budget > 0) savePlanToLocal(budget)
                     updateUI(budget, spent)
@@ -243,9 +251,11 @@ class BudgetFragment : Fragment() {
                 }
             }
 
-        db.collection("users").document(currentUser.uid)
+        transactionListener = db.collection("users").document(currentUser.uid)
             .collection("transactions")
             .addSnapshotListener { snapshots, _ ->
+                if (!isAdded) return@addSnapshotListener
+
                 val transactions = snapshots?.documents ?: emptyList()
                 renderCategoryList(transactions)
             }
@@ -281,26 +291,52 @@ class BudgetFragment : Fragment() {
     }
 
     private fun renderCategoryList(transactions: List<com.google.firebase.firestore.DocumentSnapshot>) {
+        val safeContext = context ?: return
+        if (!isAdded) return
+
         llCategoryList.removeAllViews()
         val dec = DecimalFormat("#,###")
+
         categories.forEach { category ->
-            val catUsed = transactions.filter { it.getString("category") == category }.sumOf { it.getLong("amount") ?: 0L }
-            val catGoal = 50000 
-            val itemView = LayoutInflater.from(requireContext()).inflate(R.layout.item_budget_category, llCategoryList, false)
+            val catUsed = transactions
+                .filter { it.getString("category") == category }
+                .sumOf { it.getLong("amount") ?: 0L }
+
+            val catGoal = 50000
+
+            val itemView = LayoutInflater.from(safeContext)
+                .inflate(R.layout.item_budget_category, llCategoryList, false)
+
             itemView.findViewById<TextView>(R.id.tvCatName).text = category
-            itemView.findViewById<TextView>(R.id.tvCatDetail).text = "${dec.format(catUsed)} / ${dec.format(catGoal)} 원"
-            itemView.findViewById<ProgressBar>(R.id.pbCatUsage).progress = if (catGoal > 0) (catUsed.toFloat() / catGoal * 100).toInt() else 0
-            itemView.findViewById<CardView>(R.id.btnAddExpense).setOnClickListener { showAddExpensePopup(category) }
+            itemView.findViewById<TextView>(R.id.tvCatDetail).text =
+                "${dec.format(catUsed)} / ${dec.format(catGoal)} 원"
+
+            itemView.findViewById<ProgressBar>(R.id.pbCatUsage).progress =
+                if (catGoal > 0) (catUsed.toFloat() / catGoal * 100).toInt() else 0
+
+            itemView.findViewById<CardView>(R.id.btnAddExpense).setOnClickListener {
+                showAddExpensePopup(category)
+            }
+
             llCategoryList.addView(itemView)
         }
     }
 
     private fun savePlanToLocal(amount: Long) {
-        val sharedPref = requireContext().getSharedPreferences("AppLockPrefs", Context.MODE_PRIVATE)
+        val safeContext = context ?: return
+        val sharedPref = safeContext.getSharedPreferences("AppLockPrefs", Context.MODE_PRIVATE)
         sharedPref.edit().apply {
             putBoolean("has_weekly_plan", true)
             putInt("weekly_budget", amount.toInt())
             commit()
         }
+    }
+
+    override fun onDestroyView() {
+        reportListener?.remove()
+        transactionListener?.remove()
+        reportListener = null
+        transactionListener = null
+        super.onDestroyView()
     }
 }
