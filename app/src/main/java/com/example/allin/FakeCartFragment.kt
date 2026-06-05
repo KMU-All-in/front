@@ -7,6 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -19,6 +20,7 @@ import androidx.lifecycle.lifecycleScope
 import com.bumptech.glide.Glide
 import com.example.allin.data.FakeCartRepository
 import com.example.allin.data.FakeProduct
+import com.example.allin.data.PurchaseTracker
 import com.google.firebase.auth.FirebaseAuth
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
@@ -64,6 +66,12 @@ class FakeCartFragment : Fragment() {
     private lateinit var selectionBar: View
     private lateinit var etNewReason: EditText
     private lateinit var btnSubmitReason: Button
+
+    private lateinit var cardOcrResult: CardView
+    private lateinit var ocrLinesContainer: LinearLayout
+    private lateinit var btnApplyOcr: Button
+    private var selectedOcrName: String? = null
+    private var selectedOcrPrice: Int? = null
 
     private var selectedProductForReason: FakeProduct? = null
     private lateinit var repository: FakeCartRepository
@@ -131,6 +139,7 @@ class FakeCartFragment : Fragment() {
         cardAddProduct = view.findViewById(R.id.cardAddProduct)
         cardEditProduct = view.findViewById(R.id.cardEditProduct)
         cardAddReason = view.findViewById(R.id.cardAddReason)
+        cardOcrResult = view.findViewById(R.id.cardOcrResult)
         dimView = view.findViewById(R.id.dimView)
         ivPhotoPreview = view.findViewById(R.id.ivPhotoPreview)
         ivEditPhotoPreview = view.findViewById(R.id.ivEditPhotoPreview)
@@ -152,6 +161,9 @@ class FakeCartFragment : Fragment() {
         selectionBar = view.findViewById(R.id.selectionBar)
         etNewReason = view.findViewById(R.id.etNewReason); btnSubmitReason = view.findViewById(R.id.btnSubmitReason)
 
+        ocrLinesContainer = view.findViewById(R.id.ocrLinesContainer)
+        btnApplyOcr = view.findViewById(R.id.btnApplyOcr)
+
         val expiryOptions = arrayOf("1일", "3일", "7일(권장)", "14일", "30일")
         spExpiry.adapter = ArrayAdapter(requireContext(), android.R.layout.simple_spinner_dropdown_item, expiryOptions)
         spExpiry.setSelection(2)
@@ -166,6 +178,7 @@ class FakeCartFragment : Fragment() {
         view.findViewById<ImageView>(R.id.btnCloseCard)?.setOnClickListener { hidePopups() }
         view.findViewById<ImageView>(R.id.btnCloseEdit)?.setOnClickListener { hidePopups() }
         view.findViewById<ImageView>(R.id.btnCloseReason)?.setOnClickListener { hidePopups() }
+        view.findViewById<ImageView>(R.id.btnCloseOcr)?.setOnClickListener { hidePopups() }
 
         tabUrl.setOnClickListener { selectTab(0) }; tabPhoto.setOnClickListener { selectTab(1) }; tabManual.setOnClickListener { selectTab(2) }
 
@@ -177,6 +190,21 @@ class FakeCartFragment : Fragment() {
         btnSubmit.setOnClickListener { validateAndSaveProduct(autoSave = true) }
         btnSubmitEdit.setOnClickListener { saveEditedProduct() }
         btnSubmitReason.setOnClickListener { saveNewReason() }
+
+        btnApplyOcr.setOnClickListener {
+            val name = selectedOcrName
+            val price = selectedOcrPrice
+            
+            cardOcrResult.visibility = View.GONE
+            selectedOcrName = null
+            selectedOcrPrice = null
+
+            name?.let { etManualName.setText(it) }
+            price?.let { etManualPrice.setText(it.toString()) }
+            
+            selectTab(2) // 직접 입력 탭으로 이동
+            Toast.makeText(requireContext(), "선택된 정보가 입력되었습니다. 확인 후 수정해 주세요.", Toast.LENGTH_SHORT).show()
+        }
     }
 
     private fun selectTab(index: Int) {
@@ -188,9 +216,10 @@ class FakeCartFragment : Fragment() {
         tabPhoto.backgroundTintList = ColorStateList.valueOf(if (index == 1) activeBg else inactiveBg); tabPhoto.setTextColor(if (index == 1) activeTextColor else inactiveTextColor)
         tabManual.backgroundTintList = ColorStateList.valueOf(if (index == 2) activeBg else inactiveBg); tabManual.setTextColor(if (index == 2) activeTextColor else inactiveTextColor)
 
+        layoutPhotoPreview.visibility = if (index == 0) View.GONE else View.VISIBLE
         layoutUrlInput.visibility = View.VISIBLE
         layoutPhotoInput.visibility = if (index == 1) View.VISIBLE else View.GONE
-        layoutManualInput.visibility = if (index == 0 || index == 2) View.VISIBLE else View.GONE
+        layoutManualInput.visibility = if (index == 2) View.VISIBLE else View.GONE
     }
 
     private fun observeCartItems() {
@@ -267,6 +296,8 @@ class FakeCartFragment : Fragment() {
 
         if ((isDDay || hasEnoughReasons) && product.url.isNotEmpty()) {
             try {
+                PurchaseTracker.lastOpenedProduct = product
+                PurchaseTracker.lastOpenedTime = System.currentTimeMillis()
                 val url = if (!product.url.startsWith("http")) "https://${product.url}" else product.url
                 startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
             } catch (e: Exception) {
@@ -373,48 +404,64 @@ class FakeCartFragment : Fragment() {
 
     private fun validateAndSaveProduct(autoSave: Boolean, sharedText: String = etManualName.text.toString().trim()) {
         viewLifecycleOwner.lifecycleScope.launch {
-            var name = etManualName.text.toString().trim()
-            var price = etManualPrice.text.toString().toIntOrNull() ?: 0
-            var url = etUrlInput.text.toString().trim()
-            var imageUrl = ""
-            val expiryDays = when(spExpiry.selectedItemPosition) { 0 -> 1; 1 -> 3; 2 -> 7; 3 -> 14; 4 -> 30; else -> 7 }
+            if (autoSave) withContext(Dispatchers.Main) { btnSubmit.isEnabled = false }
+            try {
+                var name = etManualName.text.toString().trim()
+                var price = etManualPrice.text.toString().toIntOrNull() ?: 0
+                var url = etUrlInput.text.toString().trim()
+                var imageUrl = selectedImageUri?.toString() ?: ""
+                val expiryDays = when(spExpiry.selectedItemPosition) { 0 -> 1; 1 -> 3; 2 -> 7; 3 -> 14; 4 -> 30; else -> 7 }
 
-            if (url.isNotEmpty()) {
-                try {
-                    Log.d("SHARE_DEBUG", "Parsing product url=$url sharedText=$sharedText")
-                    val parsed = ProductParser.parse(url, sharedText)
-                    name = if (name.isEmpty() || name == "상품 정보 분석 중..." || name == "상품 정보를 가져오는 중...") (parsed.name ?: name) else name
-                    price = if (price == 0) (parsed.price ?: 0) else price
-                    imageUrl = parsed.imageUrl ?: ""
-                    url = parsed.resolvedUrl?.takeIf { it.isNotEmpty() } ?: url
-                    Log.d("SHARE_DEBUG", "Parsed result name=$name price=$price imageUrl=$imageUrl resolvedUrl=$url")
-                    
-                    withContext(Dispatchers.Main) {
-                        etManualName.setText(name)
-                        if (price > 0) etManualPrice.setText(price.toString())
-                        if (imageUrl.isNotEmpty()) {
-                            ivPhotoPreview.visibility = View.VISIBLE
-                            clearImageTint(ivPhotoPreview)
-                            Glide.with(this@FakeCartFragment).load(imageUrl).into(ivPhotoPreview)
+                if (url.isNotEmpty()) {
+                    try {
+                        Log.d("SHARE_DEBUG", "Parsing product url=$url sharedText=$sharedText")
+                        val parsed = ProductParser.parse(url, sharedText)
+                        name = if (name.isEmpty() || name == "상품 정보 분석 중..." || name == "상품 정보를 가져오는 중...") (parsed.name ?: name) else name
+                        price = if (price == 0) (parsed.price ?: 0) else price
+                        imageUrl = parsed.imageUrl ?: ""
+                        url = parsed.resolvedUrl?.takeIf { it.isNotEmpty() } ?: url
+                        Log.d("SHARE_DEBUG", "Parsed result name=$name price=$price imageUrl=$imageUrl resolvedUrl=$url")
+                        
+                        withContext(Dispatchers.Main) {
+                            etManualName.setText(name)
+                            if (price > 0) etManualPrice.setText(price.toString())
+                            if (imageUrl.isNotEmpty()) {
+                                ivPhotoPreview.visibility = View.VISIBLE
+                                clearImageTint(ivPhotoPreview)
+                                Glide.with(this@FakeCartFragment).load(imageUrl).into(ivPhotoPreview)
+                            }
+                        }
+                    } catch (e: Exception) { Log.e("FakeCart", "Jsoup error", e) }
+                }
+
+                if (autoSave) {
+                    if (url.isEmpty()) {
+                        withContext(Dispatchers.Main) {
+                            Toast.makeText(requireContext(), "상품 URL이 없어 사진/가격을 가져올 수 없습니다.", Toast.LENGTH_SHORT).show()
                         }
                     }
-                } catch (e: Exception) { Log.e("FakeCart", "Jsoup error", e) }
-            }
-
-            if (autoSave) {
-                if (url.isEmpty()) {
-                    withContext(Dispatchers.Main) {
-                        Toast.makeText(requireContext(), "상품 URL이 없어 사진/가격을 가져올 수 없습니다.", Toast.LENGTH_SHORT).show()
-                    }
+                    repository.insert(FakeProduct(id = UUID.randomUUID().toString(), name = name.ifEmpty { "상품명 없음" }, category = "기타", price = price, url = url, imageUrl = imageUrl, expiryDays = expiryDays, addedTime = System.currentTimeMillis()))
+                    withContext(Dispatchers.Main) { Toast.makeText(requireContext(), "장바구니에 추가되었습니다.", Toast.LENGTH_SHORT).show(); hidePopups() }
                 }
-                repository.insert(FakeProduct(id = UUID.randomUUID().toString(), name = name.ifEmpty { "상품명 없음" }, category = "기타", price = price, url = url, imageUrl = imageUrl, expiryDays = expiryDays, addedTime = System.currentTimeMillis()))
-                withContext(Dispatchers.Main) { Toast.makeText(requireContext(), "장바구니에 추가되었습니다.", Toast.LENGTH_SHORT).show(); hidePopups() }
+            } finally {
+                if (autoSave) withContext(Dispatchers.Main) { btnSubmit.isEnabled = true }
             }
         }
     }
 
     private fun showAddProductPopup() { editingProduct = null; clearInputs(); dimView.visibility = View.VISIBLE; cardAddProduct.visibility = View.VISIBLE }
-    private fun hidePopups() { dimView.visibility = View.GONE; cardAddProduct.visibility = View.GONE; cardEditProduct.visibility = View.GONE; cardAddReason.visibility = View.GONE; clearInputs() }
+    private fun hidePopups() {
+        editingProduct = null
+        selectedImageUri = null
+        selectedOcrName = null
+        selectedOcrPrice = null
+        dimView.visibility = View.GONE
+        cardAddProduct.visibility = View.GONE
+        cardEditProduct.visibility = View.GONE 
+        cardAddReason.visibility = View.GONE
+        cardOcrResult.visibility = View.GONE
+        clearInputs()
+    }
     private fun clearInputs() { etUrlInput.setText(""); etManualName.setText(""); etManualPrice.setText(""); etNewReason.setText(""); restoreImageTint(ivPhotoPreview); ivPhotoPreview.setImageResource(android.R.drawable.ic_menu_camera); selectedImageUri = null }
 
     private fun clearImageTint(imageView: ImageView) {
@@ -428,8 +475,85 @@ class FakeCartFragment : Fragment() {
     private fun processOcr(uri: Uri) {
         val image = InputImage.fromFilePath(requireContext(), uri)
         val recognizer = TextRecognition.getClient(KoreanTextRecognizerOptions.Builder().build())
-        recognizer.process(image).addOnSuccessListener { visionText -> 
-            if (cardEditProduct.visibility != View.VISIBLE) { etManualName.setText(visionText.text.split("\n").firstOrNull() ?: ""); selectTab(2) }
-        }
+        recognizer.process(image).addOnSuccessListener { visionText -> parseOcrResult(visionText.text) }
     }
+
+    private fun parseOcrResult(text: String) {
+        if (cardEditProduct.visibility == View.VISIBLE) return
+        
+        val lines = text.split("\n").filter { it.trim().isNotEmpty() }
+        if (lines.isEmpty()) {
+            Toast.makeText(requireContext(), "분석된 텍스트가 없습니다.", Toast.LENGTH_SHORT).show()
+            return
+        }
+
+        ocrLinesContainer.removeAllViews()
+        selectedOcrName = null
+        selectedOcrPrice = null
+
+        lines.forEach { line ->
+            val row = LinearLayout(requireContext()).apply {
+                orientation = LinearLayout.HORIZONTAL
+                setLayoutParams(LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT))
+                setPadding(10, 10, 10, 10)
+                gravity = Gravity.CENTER_VERTICAL
+            }
+
+            val tvLine = TextView(requireContext()).apply {
+                setText(line)
+                setLayoutParams(LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f))
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 13f)
+                setTextColor(Color.BLACK)
+            }
+
+            val btnName = Button(requireContext(), null, android.R.attr.borderlessButtonStyle).apply {
+                setText("상품명")
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 10f)
+                setLayoutParams(LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, 40.dpToPx()))
+            }
+
+            val btnPrice = Button(requireContext(), null, android.R.attr.borderlessButtonStyle).apply {
+                setText("가격")
+                setTextSize(android.util.TypedValue.COMPLEX_UNIT_SP, 10f)
+                setLayoutParams(LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, 40.dpToPx()))
+            }
+
+            btnName.setOnClickListener {
+                selectedOcrName = if (selectedOcrName == line) null else line
+                for (i in 0 until ocrLinesContainer.childCount) {
+                    val otherRow = ocrLinesContainer.getChildAt(i) as LinearLayout
+                    val otherBtnName = otherRow.getChildAt(1) as Button
+                    val otherLine = (otherRow.getChildAt(0) as TextView).text.toString()
+                    otherBtnName.setTextColor(if (selectedOcrName == otherLine) Color.BLUE else Color.GRAY)
+                }
+            }
+
+            btnPrice.setOnClickListener {
+                val priceInt = line.replace(Regex("[^0-9]"), "").toIntOrNull()
+                selectedOcrPrice = if (selectedOcrPrice == priceInt) null else priceInt
+                for (i in 0 until ocrLinesContainer.childCount) {
+                    val otherRow = ocrLinesContainer.getChildAt(i) as LinearLayout
+                    val otherBtnPrice = otherRow.getChildAt(2) as Button
+                    val otherLine = (otherRow.getChildAt(0) as TextView).text.toString()
+                    val otherPriceInt = otherLine.replace(Regex("[^0-9]"), "").toIntOrNull()
+                    otherBtnPrice.setTextColor(if (selectedOcrPrice != null && selectedOcrPrice == otherPriceInt) Color.RED else Color.GRAY)
+                }
+            }
+
+            btnName.setTextColor(Color.GRAY)
+            val priceOnly = line.replace(Regex("[^0-9]"), "")
+            btnPrice.isEnabled = priceOnly.isNotEmpty()
+            btnPrice.setTextColor(Color.GRAY)
+
+            row.addView(tvLine)
+            row.addView(btnName)
+            row.addView(btnPrice)
+            ocrLinesContainer.addView(row)
+        }
+
+        dimView.visibility = View.VISIBLE
+        cardOcrResult.visibility = View.VISIBLE
+    }
+
+    private fun Int.dpToPx(): Int = (this * resources.displayMetrics.density).toInt()
 }

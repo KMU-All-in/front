@@ -166,6 +166,7 @@
             <LinearLayout android:id="@+id/layoutUrlInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:orientation="vertical">
                 <EditText android:id="@+id/etUrlInput" android:layout_width="match_parent" android:layout_height="45dp" android:background="#F2F4F8" android:hint="상품 URL을 입력하세요" android:paddingStart="12dp" android:textSize="13sp" />
             </LinearLayout>
+
             <LinearLayout android:id="@+id/layoutPhotoInput" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:visibility="gone" android:gravity="center">
                 <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="카메라 아이콘을 눌러 사진을 등록하세요" android:textSize="11sp" android:textColor="#9E9E9E"/>
             </LinearLayout>
@@ -225,6 +226,31 @@
             </RelativeLayout>
             <EditText android:id="@+id/etNewReason" android:layout_width="match_parent" android:layout_height="100dp" android:layout_marginTop="16dp" android:background="#F2F4F8" android:padding="12dp" android:gravity="top" />
             <Button android:id="@+id/btnSubmitReason" android:layout_width="match_parent" android:layout_height="50dp" android:layout_marginTop="16dp" android:backgroundTint="#4F6FFF" android:text="이유 등록" />
+        </LinearLayout>
+    </androidx.cardview.widget.CardView>
+
+    <!-- OCR 결과 선택 팝업 -->
+    <androidx.cardview.widget.CardView
+        android:id="@+id/cardOcrResult"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_centerInParent="true"
+        android:layout_margin="24dp"
+        android:visibility="gone"
+        app:cardCornerRadius="24dp"
+        android:elevation="12dp">
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:padding="24dp">
+            <RelativeLayout android:layout_width="match_parent" android:layout_height="wrap_content">
+                <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_centerHorizontal="true" android:text="분석된 텍스트 선택" android:textStyle="bold" android:textSize="16sp" />
+                <ImageView android:id="@+id/btnCloseOcr" android:layout_width="24dp" android:layout_height="24dp" android:layout_alignParentEnd="true" android:src="@android:drawable/ic_menu_close_clear_cancel" />
+            </RelativeLayout>
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:text="상품명과 가격에 해당하는 줄을 클릭하여 선택하세요." android:textSize="12sp" android:textColor="#666666"/>
+            
+            <ScrollView android:layout_width="match_parent" android:layout_height="300dp" android:layout_marginTop="16dp">
+                <LinearLayout android:id="@+id/ocrLinesContainer" android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" />
+            </ScrollView>
+
+            <Button android:id="@+id/btnApplyOcr" android:layout_width="match_parent" android:layout_height="50dp" android:layout_marginTop="20dp" android:backgroundTint="#4F6FFF" android:text="선택 완료" app:cornerRadius="10dp" />
         </LinearLayout>
     </androidx.cardview.widget.CardView>
 </RelativeLayout>

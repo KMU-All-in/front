@@ -87,6 +87,13 @@
         <activity 
             android:name=".FakeCartActivity"
             android:exported="false" />
+
+        <receiver android:name=".worker.PurchaseConfirmationReceiver" android:exported="false">
+            <intent-filter>
+                <action android:name="KEEP_PRODUCT" />
+                <action android:name="AUTO_DELETE_PRODUCT" />
+            </intent-filter>
+        </receiver>
         
     </application>
 

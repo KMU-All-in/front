@@ -16,6 +16,8 @@ import com.example.allin.HomeActivity
 import com.example.allin.data.AppDatabase
 import com.example.allin.data.Payment
 import com.example.allin.data.PaymentRepository
+import com.example.allin.data.FakeProduct
+import com.example.allin.data.PurchaseTracker
 import com.google.firebase.functions.FirebaseFunctions
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -101,6 +103,17 @@ class PaymentNotificationListenerService : NotificationListenerService() {
     private fun savePayment(content: String, title: String, text: String, amount: Int) {
         scope.launch {
             try {
+                val tracker = PurchaseTracker.lastOpenedProduct
+                val trackTime = PurchaseTracker.lastOpenedTime
+                if (tracker != null && (System.currentTimeMillis() - trackTime) < 15 * 60 * 1000) {
+                    if (amount == tracker.price) {
+                        sendConfirmationNotification(tracker)
+                        // 15분 이내 1회만 인식하도록 추적 데이터 초기화
+                        PurchaseTracker.lastOpenedProduct = null
+                        PurchaseTracker.lastOpenedTime = 0
+                    }
+                }
+
                 val serverParsed = parseNotificationOnServer(title, text)
                 val storeName = serverParsed?.storeName ?: extractStoreName(content, title)
                 val category = serverParsed?.category ?: classifyCategory(storeName, content)
@@ -118,6 +131,44 @@ class PaymentNotificationListenerService : NotificationListenerService() {
             } catch (e: Exception) {
                 Log.e("PaymentListener", "저장 오류", e)
             }
+        }
+    }
+
+    private fun sendConfirmationNotification(product: FakeProduct) {
+        val channelId = "PurchaseConfirmationChannel"
+        val notificationManager = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            val channel = NotificationChannel(channelId, "구매 확인", NotificationManager.IMPORTANCE_HIGH)
+            notificationManager.createNotificationChannel(channel)
+        }
+
+        val keepIntent = Intent(this, PurchaseConfirmationReceiver::class.java).apply {
+            action = "KEEP_PRODUCT"
+            putExtra("product_id", product.id)
+            putExtra("product_name", product.name)
+        }
+        val keepPendingIntent = PendingIntent.getBroadcast(this, 3001, keepIntent, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
+
+        val notification = NotificationCompat.Builder(this, channelId)
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentTitle("상품 구매가 감지되었습니다")
+            .setContentText("'${product.name}'을(를) 구매하셨나요? 15초 내에 유지 버튼을 누르지 않으면 목록에서 자동 삭제됩니다.")
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(Notification.DEFAULT_ALL)
+            .addAction(android.R.drawable.ic_menu_save, "목록 유지", keepPendingIntent)
+            .setContentIntent(keepPendingIntent)
+            .setAutoCancel(true)
+            .build()
+
+        notificationManager.notify(3001, notification)
+
+        PendingDeletionManager.scheduleDeletion(product.id, 15000) {
+            val deleteIntent = Intent(this, PurchaseConfirmationReceiver::class.java).apply {
+                action = "AUTO_DELETE_PRODUCT"
+                putExtra("product_id", product.id)
+                putExtra("product_name", product.name)
+            }
+            sendBroadcast(deleteIntent)
         }
     }
 
