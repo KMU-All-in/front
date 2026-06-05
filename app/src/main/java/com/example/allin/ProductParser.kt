@@ -22,8 +22,16 @@ object ProductParser {
 
     suspend fun parse(url: String, sharedText: String = ""): ParsedProduct {
         val result = ParsedProduct()
+        var triedServerParsing = false
+
+        try {
+            triedServerParsing = true
+            fetchFromServer(url, sharedText)?.let { result.fillMissingWith(it) }
+        } catch (e: Exception) {
+            Log.e("ProductParser", "Initial server parse error: ${e.message}")
+        }
         
-        // 1. 클라이언트 사이드 Jsoup 파싱 시도
+        // 1. 서버 분석 결과가 부족하면 클라이언트 사이드 Jsoup 파싱 시도
         try {
             val doc = withContext(Dispatchers.IO) {
                 Jsoup.connect(url)
@@ -113,14 +121,11 @@ object ProductParser {
         }
 
         // 2. 정보가 부족할 경우 서버 사이드 파싱(AI -> 기존 파서) 시도
-        if (result.needsServerParsing()) {
+        if (result.needsServerParsing() && !triedServerParsing) {
             try {
                 val serverResult = fetchFromServer(url, sharedText)
                 if (serverResult != null) {
-                    result.name = result.name.takeUnless { it.isNullOrBlank() } ?: serverResult.name
-                    result.price = if ((result.price ?: 0) <= 0) serverResult.price else result.price
-                    result.imageUrl = result.imageUrl.takeUnless { it.isNullOrBlank() } ?: serverResult.imageUrl
-                    result.resolvedUrl = serverResult.resolvedUrl
+                    result.fillMissingWith(serverResult)
                 }
             } catch (e: Exception) {
                 Log.e("ProductParser", "Server parse error: ${e.message}")
@@ -139,6 +144,9 @@ object ProductParser {
 
         callProductParser(functions, "analyzeProductUrl", data)?.let { parsed ->
             if (!parsed.needsServerParsing()) return parsed
+            return callProductParser(functions, "advancedProductParse", data)
+                ?.also { it.fillMissingWith(parsed) }
+                ?: parsed
         }
 
         return callProductParser(functions, "advancedProductParse", data)
@@ -177,6 +185,13 @@ object ProductParser {
 
     private fun ParsedProduct.needsServerParsing(): Boolean {
         return name.isNullOrBlank() || (price ?: 0) <= 0 || imageUrl.isNullOrBlank()
+    }
+
+    private fun ParsedProduct.fillMissingWith(other: ParsedProduct) {
+        name = name.takeUnless { it.isNullOrBlank() } ?: other.name
+        price = if ((price ?: 0) <= 0) other.price else price
+        imageUrl = imageUrl.takeUnless { it.isNullOrBlank() } ?: other.imageUrl
+        resolvedUrl = resolvedUrl.takeUnless { it.isNullOrBlank() } ?: other.resolvedUrl
     }
 
     private fun findProductInJson(json: JSONObject?): JSONObject? {
