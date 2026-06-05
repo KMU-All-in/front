@@ -112,14 +112,14 @@ object ProductParser {
             Log.e("ProductParser", "Jsoup error: ${e.message}")
         }
 
-        // 2. 정보가 부족할 경우 서버 사이드 파싱(Puppeteer) 시도
-        if (result.name.isNullOrEmpty() || (result.price ?: 0) <= 0) {
+        // 2. 정보가 부족할 경우 서버 사이드 파싱(AI -> 기존 파서) 시도
+        if (result.needsServerParsing()) {
             try {
                 val serverResult = fetchFromServer(url, sharedText)
                 if (serverResult != null) {
-                    result.name = result.name ?: serverResult.name
+                    result.name = result.name.takeUnless { it.isNullOrBlank() } ?: serverResult.name
                     result.price = if ((result.price ?: 0) <= 0) serverResult.price else result.price
-                    result.imageUrl = result.imageUrl ?: serverResult.imageUrl
+                    result.imageUrl = result.imageUrl.takeUnless { it.isNullOrBlank() } ?: serverResult.imageUrl
                     result.resolvedUrl = serverResult.resolvedUrl
                 }
             } catch (e: Exception) {
@@ -137,24 +137,46 @@ object ProductParser {
             "sharedText" to sharedText
         )
 
+        callProductParser(functions, "analyzeProductUrl", data)?.let { parsed ->
+            if (!parsed.needsServerParsing()) return parsed
+        }
+
+        return callProductParser(functions, "advancedProductParse", data)
+    }
+
+    private suspend fun callProductParser(
+        functions: FirebaseFunctions,
+        functionName: String,
+        data: HashMap<String, String>
+    ): ParsedProduct? {
         return try {
-            val result = functions.getHttpsCallable("advancedProductParse")
+            val result = functions.getHttpsCallable(functionName)
                 .call(data)
                 .await()
             
             val map = result.getData() as? Map<String, Any>
             if (map?.get("success") == true) {
                 val res = map["result"] as? Map<String, Any>
+                val rawExtracted = res?.get("rawExtracted") as? Map<String, Any>
                 ParsedProduct(
-                    name = res?.get("name") as? String,
-                    price = (res?.get("price") as? Number)?.toInt(),
-                    imageUrl = res?.get("imageUrl") as? String,
+                    name = (res?.get("name") as? String)
+                        ?: (res?.get("productName") as? String)
+                        ?: (rawExtracted?.get("name") as? String),
+                    price = ((res?.get("price") as? Number)
+                        ?: (rawExtracted?.get("price") as? Number))?.toInt(),
+                    imageUrl = (res?.get("imageUrl") as? String)
+                        ?: (rawExtracted?.get("imageUrl") as? String),
                     resolvedUrl = res?.get("resolvedUrl") as? String
                 )
             } else null
         } catch (e: Exception) {
+            Log.e("ProductParser", "$functionName error: ${e.message}")
             null
         }
+    }
+
+    private fun ParsedProduct.needsServerParsing(): Boolean {
+        return name.isNullOrBlank() || (price ?: 0) <= 0 || imageUrl.isNullOrBlank()
     }
 
     private fun findProductInJson(json: JSONObject?): JSONObject? {
