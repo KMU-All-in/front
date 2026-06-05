@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
 import android.widget.Toast
+import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
 import com.google.firebase.auth.FirebaseAuth
 import androidx.core.view.WindowInsetsCompat
@@ -39,6 +40,7 @@ class AllInActivity : AppCompatActivity() {
         val etPassword = findViewById<EditText>(R.id.etPassword)
         val btnLogin = findViewById<Button>(R.id.btnLogin)
         val btnRegister = findViewById<Button>(R.id.btnRegister)
+        val btnResetPassword = findViewById<Button>(R.id.btnResetPassword)
 
         btnLogin.setOnClickListener {
             val email = etEmail.text.toString().trim()
@@ -73,6 +75,54 @@ class AllInActivity : AppCompatActivity() {
             val intent = Intent(this, TermsActivity::class.java)
             startActivity(intent)
         }
+
+        btnResetPassword.setOnClickListener {
+            showPasswordResetDialog(etEmail.text.toString().trim())
+        }
+    }
+
+    private fun showPasswordResetDialog(initialEmail: String) {
+        val emailInput = EditText(this).apply {
+            hint = "가입한 이메일 주소"
+            inputType = android.text.InputType.TYPE_TEXT_VARIATION_EMAIL_ADDRESS
+            setText(initialEmail)
+            setSingleLine(true)
+            setPadding(32, 12, 32, 12)
+        }
+
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("비밀번호 찾기")
+            .setMessage("가입한 이메일로 비밀번호 재설정 메일을 보내드립니다.")
+            .setView(emailInput)
+            .setPositiveButton("메일 보내기", null)
+            .setNegativeButton("취소", null)
+            .create()
+
+        dialog.setOnShowListener {
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener {
+                val email = emailInput.text.toString().trim()
+                if (email.isEmpty()) {
+                    Toast.makeText(this, "이메일을 입력해주세요.", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+                if (!android.util.Patterns.EMAIL_ADDRESS.matcher(email).matches()) {
+                    Toast.makeText(this, "올바른 이메일 형식이 아닙니다.", Toast.LENGTH_SHORT).show()
+                    return@setOnClickListener
+                }
+
+                auth.sendPasswordResetEmail(email)
+                    .addOnCompleteListener { task ->
+                        if (task.isSuccessful) {
+                            Toast.makeText(this, "비밀번호 재설정 메일을 보냈습니다.", Toast.LENGTH_LONG).show()
+                            dialog.dismiss()
+                        } else {
+                            Toast.makeText(this, "메일 발송 실패: ${task.exception?.message}", Toast.LENGTH_LONG).show()
+                        }
+                    }
+            }
+        }
+
+        dialog.show()
     }
 
     override fun onWindowFocusChanged(hasFocus: Boolean) {
