@@ -1063,15 +1063,17 @@ const net = require("net");
 const PRODUCT_USER_AGENT = "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Mobile/15E148 Safari/604.1";
 
 function cleanProductName(name) {
-  return String(name || "")
+  return decodeHtmlEntities(String(name || ""))
+    .replace(/<[^>]+>/g, " ")
     .replace(/\s+/g, " ")
-    .replace(/\s*[-|]\s*(무신사|MUSINSA|지그재그|ZIGZAG).*$/i, "")
+    .replace(/\s*[-|]\s*(무신사|MUSINSA|지그재그|ZIGZAG|쿠팡|COUPANG|네이버\s*쇼핑|NAVER).*$/i, "")
+    .replace(/\s*[-|]\s*(?:사이즈\s*&\s*후기|사이즈\s*\/\s*후기|후기|리뷰)\s*$/i, "")
     .trim();
 }
 
 function extractPriceValue(value) {
   if (value === null || value === undefined) return 0;
-  const text = String(value);
+  const text = decodeHtmlEntities(String(value)).replace(/\.\d{1,2}\b/g, "");
   const cleaned = text.replace(/[^0-9]/g, "");
   const price = parseInt(cleaned, 10);
   return Number.isFinite(price) ? price : 0;
@@ -1111,10 +1113,37 @@ function extractSharedProduct(sharedText = "") {
 function absolutizeUrl(value, baseUrl) {
   if (!value) return "";
   try {
-    return new URL(value, baseUrl).toString();
+    return new URL(decodeHtmlEntities(String(value).trim()), baseUrl).toString();
   } catch (error) {
     return value;
   }
+}
+
+function decodeHtmlEntities(value) {
+  return String(value || "")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCodePoint(Number(code)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, code) => String.fromCodePoint(parseInt(code, 16)))
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/&apos;/g, "'")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&nbsp;/g, " ");
+}
+
+function decodeUrlRepeatedly(value) {
+  let decoded = decodeHtmlEntities(String(value || ""));
+  for (let i = 0; i < 3; i += 1) {
+    try {
+      const next = decodeURIComponent(decoded);
+      if (next === decoded) break;
+      decoded = next;
+    } catch (error) {
+      break;
+    }
+  }
+  return decoded;
 }
 
 function normalizeHostname(hostname) {
@@ -1246,15 +1275,25 @@ async function resolveProductUrl(url) {
   }
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function getAttrValue(tag, attrName) {
+  const escaped = escapeRegExp(attrName);
+  const match = String(tag || "").match(new RegExp(`\\s${escaped}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>]+))`, "i"));
+  return decodeHtmlEntities((match && (match[1] || match[2] || match[3])) || "").trim();
+}
+
 function getMeta(html, names) {
   for (const name of names) {
-    const patterns = [
-      new RegExp(`<meta[^>]+(?:property|name)=["']${name}["'][^>]+content=["']([^"']+)["'][^>]*>`, "i"),
-      new RegExp(`<meta[^>]+content=["']([^"']+)["'][^>]+(?:property|name)=["']${name}["'][^>]*>`, "i")
-    ];
-    for (const pattern of patterns) {
-      const match = html.match(pattern);
-      if (match && match[1]) return match[1].replace(/&amp;/g, "&").trim();
+    const tags = String(html || "").match(/<meta\b[^>]*>/gi) || [];
+    for (const tag of tags) {
+      const key = getAttrValue(tag, "property") || getAttrValue(tag, "name") || getAttrValue(tag, "itemprop");
+      if (key.toLowerCase() === String(name).toLowerCase()) {
+        const content = getAttrValue(tag, "content");
+        if (content) return content;
+      }
     }
   }
   return "";
@@ -1264,7 +1303,7 @@ function findProductInJson(value) {
   if (!value || typeof value !== "object") return null;
   const type = value["@type"] || value.type;
   const types = Array.isArray(type) ? type : [type];
-  if (types.some((item) => String(item).toLowerCase() === "product")) return value;
+  if (types.some((item) => String(item).toLowerCase().split("/").pop() === "product")) return value;
 
   if (Array.isArray(value)) {
     for (const item of value) {
@@ -1284,31 +1323,121 @@ function findProductInJson(value) {
 function extractImageValue(value) {
   if (typeof value === "string") return value;
   if (Array.isArray(value)) return extractImageValue(value[0]);
-  if (value && typeof value === "object") return value.url || value.contentUrl || "";
+  if (value && typeof value === "object") return value.url || value.contentUrl || value["@id"] || "";
   return "";
 }
 
 function extractOfferPrice(offers) {
-  if (Array.isArray(offers)) return extractOfferPrice(offers[0]);
+  if (Array.isArray(offers)) {
+    for (const offer of offers) {
+      const price = extractOfferPrice(offer);
+      if (price > 0) return price;
+    }
+    return 0;
+  }
   if (offers && typeof offers === "object") {
-    return extractPriceValue(offers.price || offers.lowPrice || offers.highPrice);
+    return extractPriceValue(
+      offers.price ||
+      offers.salePrice ||
+      offers.lowPrice ||
+      offers.highPrice ||
+      offers.priceSpecification?.price ||
+      offers.priceSpecification?.minPrice
+    );
   }
   return 0;
 }
 
+function parseJsonLdBlocks(html) {
+  const matches = [...String(html || "").matchAll(/<script\b[^>]*type\s*=\s*(?:"application\/ld\+json"|'application\/ld\+json'|application\/ld\+json)[^>]*>([\s\S]*?)<\/script>/gi)];
+  const parsedBlocks = [];
+
+  for (const match of matches) {
+    const raw = decodeHtmlEntities(match[1]).trim();
+    if (!raw) continue;
+
+    for (const candidate of [raw, raw.replace(/,\s*([}\]])/g, "$1")]) {
+      try {
+        parsedBlocks.push(JSON.parse(candidate));
+        break;
+      } catch (error) {
+        // Some shopping sites include non-JSON script data; skip it.
+      }
+    }
+  }
+
+  return parsedBlocks;
+}
+
+function firstTextMatch(html, patterns) {
+  const content = String(html || "");
+  for (const pattern of patterns) {
+    const match = content.match(pattern);
+    if (match && match[1]) {
+      return decodeHtmlEntities(match[1].replace(/<[^>]+>/g, " ")).replace(/\s+/g, " ").trim();
+    }
+  }
+  return "";
+}
+
+function isLikelyProductUrl(value) {
+  try {
+    const parsed = new URL(value);
+    const hostname = parsed.hostname.toLowerCase();
+    const path = parsed.pathname.toLowerCase();
+    return (
+      (hostname === "www.musinsa.com" || hostname.endsWith(".musinsa.com")) &&
+      /^\/(?:app\/goods|products)\/\d+/.test(path)
+    );
+  } catch (error) {
+    return false;
+  }
+}
+
+function canonicalizeProductUrl(value) {
+  try {
+    const parsed = new URL(value);
+    if (isLikelyProductUrl(parsed.toString())) {
+      return `${parsed.origin}${parsed.pathname}`;
+    }
+  } catch (error) {
+    // Keep the original value if it is not a valid URL.
+  }
+  return value;
+}
+
+function extractEmbeddedProductUrl(html, baseUrl) {
+  const content = decodeUrlRepeatedly(html);
+  const candidates = new Set();
+  const patterns = [
+    /https?:\\?\/\\?\/[^\s"'<>\\]+/gi,
+    /\blink\s*=\s*(https?:\/\/[^\s"'&<>]+)/gi,
+    /\b(?:af_android_url|af_ios_url|deep_link_value)=([^&"'<>]+)/gi,
+  ];
+
+  for (const pattern of patterns) {
+    for (const match of content.matchAll(pattern)) {
+      const raw = match[1] || match[0];
+      const normalized = decodeUrlRepeatedly(raw.replace(/\\\//g, "/"));
+      candidates.add(absolutizeUrl(normalized, baseUrl));
+    }
+  }
+
+  for (const candidate of candidates) {
+    if (isLikelyProductUrl(candidate)) return canonicalizeProductUrl(candidate);
+  }
+  return "";
+}
+
 function parseProductFromHtml(html, pageUrl, sharedText = "") {
   const shared = extractSharedProduct(sharedText);
-  const jsonMatches = [...String(html || "").matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi)];
+  const titleText = cleanProductName(html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "");
+  const blockedTitle = /^(access denied|forbidden|보안 확인 중|접근이 제한)/i.test(titleText);
   let jsonProduct = null;
 
-  for (const match of jsonMatches) {
-    try {
-      const parsed = JSON.parse(match[1].trim());
-      jsonProduct = findProductInJson(parsed);
-      if (jsonProduct) break;
-    } catch (error) {
-      // Ignore malformed script blocks.
-    }
+  for (const parsed of parseJsonLdBlocks(html)) {
+    jsonProduct = findProductInJson(parsed);
+    if (jsonProduct) break;
   }
 
   const jsonName = jsonProduct ? cleanProductName(jsonProduct.name) : "";
@@ -1316,18 +1445,26 @@ function parseProductFromHtml(html, pageUrl, sharedText = "") {
   const jsonPrice = jsonProduct ? extractOfferPrice(jsonProduct.offers) : 0;
 
   const metaName = cleanProductName(
-    getMeta(html, ["og:title", "twitter:title", "title"]) ||
-    (html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1] || "")
+    getMeta(html, ["og:title", "twitter:title", "title", "name"]) ||
+    (blockedTitle ? "" : titleText)
   );
-  const metaImage = getMeta(html, ["og:image", "twitter:image"]);
+  const metaImage = getMeta(html, ["og:image", "twitter:image", "image"]);
   const metaPrice = extractPriceValue(
-    getMeta(html, ["product:price:amount", "og:price:amount", "product:sale_price:amount", "twitter:data1"])
+    getMeta(html, ["product:price:amount", "og:price:amount", "product:sale_price:amount", "twitter:data1", "price"])
   );
+  const bodyName = cleanProductName(firstTextMatch(html, [
+    /<h1\b[^>]*>([\s\S]*?)<\/h1>/i,
+    /<(?:strong|span|div)\b[^>]*(?:class|id)=["'][^"']*(?:product|goods|item)[^"']*(?:name|title)[^"']*["'][^>]*>([\s\S]*?)<\/(?:strong|span|div)>/i,
+  ]));
+  const bodyImage = firstTextMatch(html, [
+    /<img\b[^>]*(?:class|id)=["'][^"']*(?:product|goods|item|main)[^"']*["'][^>]*\bsrc=["']([^"']+)["'][^>]*>/i,
+    /<img\b[^>]*\bsrc=["']([^"']+)["'][^>]*(?:class|id)=["'][^"']*(?:product|goods|item|main)[^"']*["'][^>]*>/i,
+  ]);
 
   return {
-    name: jsonName || metaName || shared.name,
-    price: jsonPrice || metaPrice || shared.price || extractPriceFromText(html),
-    imageUrl: absolutizeUrl(jsonImage || metaImage, pageUrl),
+    name: jsonName || metaName || (blockedTitle ? "" : bodyName) || shared.name,
+    price: jsonPrice || metaPrice || shared.price || extractPriceFromText(stripHtmlForAI(html)),
+    imageUrl: absolutizeUrl(jsonImage || metaImage || bodyImage, pageUrl),
   };
 }
 
@@ -1382,6 +1519,22 @@ function normalizeAIProductAnalysis(parsed, fallbackProductInfo) {
     availability: parsed.availability || "",
     confidence,
     reason: parsed.reason || "",
+  };
+}
+
+function normalizeExtractedProductAnalysis(productInfo, confidence = 0.45, reason = "HTML metadata fallback") {
+  const price = Number(productInfo.price || 0);
+  return {
+    productName: cleanProductName(productInfo.name || ""),
+    price: Number.isFinite(price) ? price : 0,
+    currency: "KRW",
+    brand: "",
+    description: "",
+    productInfo: [],
+    imageUrl: productInfo.imageUrl || "",
+    availability: "",
+    confidence,
+    reason,
   };
 }
 
@@ -1473,21 +1626,37 @@ exports.analyzeProductUrl = onCall(async (request) => {
   const targetUrl = validateProductUrl(url);
 
   try {
-    const resolvedUrl = await resolveProductUrl(targetUrl);
-    const htmlResponse = await requestUrl(resolvedUrl, {
+    let resolvedUrl = await resolveProductUrl(targetUrl);
+    let htmlResponse = await requestUrl(resolvedUrl, {
       method: "GET",
       timeoutMs: 15000,
       maxBytes: 1200000,
     });
-    const finalUrl = htmlResponse.finalUrl || resolvedUrl;
+    let finalUrl = htmlResponse.finalUrl || resolvedUrl;
+    const embeddedProductUrl = extractEmbeddedProductUrl(htmlResponse.body, finalUrl);
+    if (embeddedProductUrl && embeddedProductUrl !== finalUrl) {
+      resolvedUrl = embeddedProductUrl;
+      htmlResponse = await requestUrl(resolvedUrl, {
+        method: "GET",
+        timeoutMs: 15000,
+        maxBytes: 1200000,
+      });
+      finalUrl = htmlResponse.finalUrl || resolvedUrl;
+    }
     const productInfo = parseProductFromHtml(htmlResponse.body, finalUrl, sharedText);
-    const analysis = await analyzeProductWithAI({
-      url: targetUrl,
-      resolvedUrl: finalUrl,
-      html: htmlResponse.body,
-      productInfo,
-      sharedText,
-    });
+    let analysis = normalizeExtractedProductAnalysis(productInfo);
+
+    try {
+      analysis = await analyzeProductWithAI({
+        url: targetUrl,
+        resolvedUrl: finalUrl,
+        html: htmlResponse.body,
+        productInfo,
+        sharedText,
+      });
+    } catch (error) {
+      console.warn("AI Product URL Analysis fallback:", error.message);
+    }
 
     return {
       success: true,
@@ -1525,8 +1694,15 @@ exports.advancedProductParse = onCall(async (request) => {
 
     try {
       const htmlResponse = await requestUrl(resolvedUrl, { method: "GET", timeoutMs: 12000 });
-      productInfo = parseProductFromHtml(htmlResponse.body, htmlResponse.finalUrl || resolvedUrl, sharedText);
-      productInfo.resolvedUrl = htmlResponse.finalUrl || resolvedUrl;
+      let finalUrl = htmlResponse.finalUrl || resolvedUrl;
+      const embeddedProductUrl = extractEmbeddedProductUrl(htmlResponse.body, finalUrl);
+      if (embeddedProductUrl && embeddedProductUrl !== finalUrl) {
+        const productResponse = await requestUrl(embeddedProductUrl, { method: "GET", timeoutMs: 12000 });
+        htmlResponse.body = productResponse.body;
+        finalUrl = productResponse.finalUrl || embeddedProductUrl;
+      }
+      productInfo = parseProductFromHtml(htmlResponse.body, finalUrl, sharedText);
+      productInfo.resolvedUrl = finalUrl;
     } catch (error) {
       productInfo = { ...extractSharedProduct(sharedText), imageUrl: "", resolvedUrl };
     }
