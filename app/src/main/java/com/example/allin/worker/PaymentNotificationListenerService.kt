@@ -48,6 +48,7 @@ class PaymentNotificationListenerService : NotificationListenerService() {
         val title = extras.getString(Notification.EXTRA_TITLE) ?: ""
         val text = extras.getCharSequence(Notification.EXTRA_TEXT)?.toString() ?: ""
         val fullText = "$title $text"
+        if (fullText.contains("광고")) return
 
         // 1. 제외 키워드 체크 (매우 엄격하게 차단)
         val stopKeywords = listOf(
