@@ -716,10 +716,43 @@ class FakeCartActivity : AppCompatActivity() {
                 setLayoutParams(LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, 40.dpToPx()))
             }
 
+            fun extractPrice(text: String): Int? {
+                // 1. "28,490원" 또는 "28490원" 처럼 '원'이 붙은 숫자 중 가장 큰 값 찾기
+                val wonPattern = Pattern.compile("([0-9,]+)\\s*원")
+                val wonMatcher = wonPattern.matcher(text)
+                var maxWonPrice = -1
+                while (wonMatcher.find()) {
+                    val priceStr = wonMatcher.group(1)?.replace(",", "") ?: ""
+                    val price = priceStr.toIntOrNull() ?: -1
+                    if (price > maxWonPrice) maxWonPrice = price
+                }
+                if (maxWonPrice > 0) return maxWonPrice
+
+                // 2. '원'이 없다면 콤마(,)가 포함된 숫자 덩어리 찾기 (예: "28,490")
+                val commaPattern = Pattern.compile("([0-9]{1,3}(,[0-9]{3})+)")
+                val commaMatcher = commaPattern.matcher(text)
+                var maxCommaPrice = -1
+                while (commaMatcher.find()) {
+                    val priceStr = commaMatcher.group(1)?.replace(",", "") ?: ""
+                    val price = priceStr.toIntOrNull() ?: -1
+                    if (price > maxCommaPrice) maxCommaPrice = price
+                }
+                if (maxCommaPrice > 0) return maxCommaPrice
+                
+                // 3. 콤마도 없다면 단순히 숫자 덩어리 중 가장 큰 값 (100ml당 659원 같은 함정 주의, 보통 가격이 제일 큼)
+                val numPattern = Pattern.compile("([0-9]+)")
+                val numMatcher = numPattern.matcher(text)
+                var maxNumPrice = -1
+                while (numMatcher.find()) {
+                    val price = numMatcher.group(1)?.toIntOrNull() ?: -1
+                    if (price > maxNumPrice) maxNumPrice = price
+                }
+                return if (maxNumPrice > 0) maxNumPrice else null
+            }
+
             fun updateSelectionUI() {
                 btnName.setTextColor(if (selectedOcrName == line) Color.BLUE else Color.GRAY)
-                val priceOnly = line.replace(Regex("[^0-9]"), "")
-                val priceInt = priceOnly.toIntOrNull()
+                val priceInt = extractPrice(line)
                 btnPrice.isEnabled = priceInt != null
                 btnPrice.setTextColor(if (selectedOcrPrice != null && selectedOcrPrice == priceInt) Color.RED else Color.GRAY)
             }
@@ -737,13 +770,13 @@ class FakeCartActivity : AppCompatActivity() {
             }
 
             btnPrice.setOnClickListener {
-                val priceInt = line.replace(Regex("[^0-9]"), "").toIntOrNull()
+                val priceInt = extractPrice(line)
                 selectedOcrPrice = if (selectedOcrPrice == priceInt) null else priceInt
                 for (i in 0 until ocrLinesContainer.childCount) {
                     val otherRow = ocrLinesContainer.getChildAt(i) as LinearLayout
                     val otherBtnPrice = otherRow.getChildAt(2) as Button
                     val otherLine = (otherRow.getChildAt(0) as TextView).text.toString()
-                    val otherPriceInt = otherLine.replace(Regex("[^0-9]"), "").toIntOrNull()
+                    val otherPriceInt = extractPrice(otherLine)
                     otherBtnPrice.setTextColor(if (selectedOcrPrice != null && selectedOcrPrice == otherPriceInt) Color.RED else Color.GRAY)
                 }
             }

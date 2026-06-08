@@ -31,6 +31,7 @@ import kotlinx.coroutines.withContext
 import org.jsoup.Jsoup
 import java.text.DecimalFormat
 import java.util.*
+import java.util.regex.Pattern
 import java.util.concurrent.TimeUnit
 
 class FakeCartFragment : Fragment() {
@@ -518,6 +519,37 @@ class FakeCartFragment : Fragment() {
                 setLayoutParams(LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, 40.dpToPx()))
             }
 
+            fun extractPrice(text: String): Int? {
+                val wonPattern = Pattern.compile("([0-9,]+)\\s*원")
+                val wonMatcher = wonPattern.matcher(text)
+                var maxWonPrice = -1
+                while (wonMatcher.find()) {
+                    val priceStr = wonMatcher.group(1)?.replace(",", "") ?: ""
+                    val price = priceStr.toIntOrNull() ?: -1
+                    if (price > maxWonPrice) maxWonPrice = price
+                }
+                if (maxWonPrice > 0) return maxWonPrice
+
+                val commaPattern = Pattern.compile("([0-9]{1,3}(,[0-9]{3})+)")
+                val commaMatcher = commaPattern.matcher(text)
+                var maxCommaPrice = -1
+                while (commaMatcher.find()) {
+                    val priceStr = commaMatcher.group(1)?.replace(",", "") ?: ""
+                    val price = priceStr.toIntOrNull() ?: -1
+                    if (price > maxCommaPrice) maxCommaPrice = price
+                }
+                if (maxCommaPrice > 0) return maxCommaPrice
+                
+                val numPattern = Pattern.compile("([0-9]+)")
+                val numMatcher = numPattern.matcher(text)
+                var maxNumPrice = -1
+                while (numMatcher.find()) {
+                    val price = numMatcher.group(1)?.toIntOrNull() ?: -1
+                    if (price > maxNumPrice) maxNumPrice = price
+                }
+                return if (maxNumPrice > 0) maxNumPrice else null
+            }
+
             btnName.setOnClickListener {
                 selectedOcrName = if (selectedOcrName == line) null else line
                 for (i in 0 until ocrLinesContainer.childCount) {
@@ -529,20 +561,20 @@ class FakeCartFragment : Fragment() {
             }
 
             btnPrice.setOnClickListener {
-                val priceInt = line.replace(Regex("[^0-9]"), "").toIntOrNull()
+                val priceInt = extractPrice(line)
                 selectedOcrPrice = if (selectedOcrPrice == priceInt) null else priceInt
                 for (i in 0 until ocrLinesContainer.childCount) {
                     val otherRow = ocrLinesContainer.getChildAt(i) as LinearLayout
                     val otherBtnPrice = otherRow.getChildAt(2) as Button
                     val otherLine = (otherRow.getChildAt(0) as TextView).text.toString()
-                    val otherPriceInt = otherLine.replace(Regex("[^0-9]"), "").toIntOrNull()
+                    val otherPriceInt = extractPrice(otherLine)
                     otherBtnPrice.setTextColor(if (selectedOcrPrice != null && selectedOcrPrice == otherPriceInt) Color.RED else Color.GRAY)
                 }
             }
 
             btnName.setTextColor(Color.GRAY)
-            val priceOnly = line.replace(Regex("[^0-9]"), "")
-            btnPrice.isEnabled = priceOnly.isNotEmpty()
+            val initialPrice = extractPrice(line)
+            btnPrice.isEnabled = initialPrice != null
             btnPrice.setTextColor(Color.GRAY)
 
             row.addView(tvLine)
